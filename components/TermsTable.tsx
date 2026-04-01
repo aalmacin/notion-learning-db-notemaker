@@ -93,6 +93,7 @@ export function TermsTable({ initialData, initialCategories }: { initialData: Te
   const [expanded, setExpanded] = useState<ExpandedState>({});
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
   const [notionSuccessId, setNotionSuccessId] = useState<number | null>(null);
+  const [notionFilter, setNotionFilter] = useState<'all' | 'pending' | 'added'>('pending');
 
   const { data = initialData } = useQuery({
     queryKey: queryKeys.terms.all(),
@@ -113,11 +114,13 @@ export function TermsTable({ initialData, initialCategories }: { initialData: Te
   }, [data]);
 
   const filteredData = useMemo(() => {
-    if (selectedCategories.length === 0) return data;
-    return data.filter((term) =>
-      selectedCategories.every((cat) => term.categories.includes(cat))
-    );
-  }, [data, selectedCategories]);
+    return data.filter((term) => {
+      if (notionFilter === 'pending' && term.notion_page_id !== null) return false;
+      if (notionFilter === 'added' && term.notion_page_id === null) return false;
+      if (selectedCategories.length > 0 && !selectedCategories.every((cat) => term.categories.includes(cat))) return false;
+      return true;
+    });
+  }, [data, selectedCategories, notionFilter]);
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => deleteTerm(id),
@@ -274,6 +277,21 @@ export function TermsTable({ initialData, initialCategories }: { initialData: Te
           onChange={(e) => setGlobalFilter(e.target.value)}
           className="flex-1 min-w-[200px] px-3 py-2 text-sm border border-zinc-200 rounded-lg bg-white dark:bg-zinc-900 dark:border-zinc-700 text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-300 dark:focus:ring-zinc-600"
         />
+        <div className="flex items-center gap-1 border border-zinc-200 dark:border-zinc-700 rounded-lg overflow-hidden">
+          {(['pending', 'all', 'added'] as const).map((val) => (
+            <button
+              key={val}
+              onClick={() => { setNotionFilter(val); setPagination((p) => ({ ...p, pageIndex: 0 })); }}
+              className={`px-3 py-2 text-xs font-medium transition-colors ${
+                notionFilter === val
+                  ? 'bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900'
+                  : 'bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+              }`}
+            >
+              {val === 'pending' ? 'Not on Notion' : val === 'added' ? 'On Notion' : 'All'}
+            </button>
+          ))}
+        </div>
         {filterCategoryNames.length > 0 && (
           <div className="flex flex-wrap gap-2 items-center">
             <span className="text-xs text-zinc-500 dark:text-zinc-400">Filter by category:</span>
