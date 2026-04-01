@@ -6,6 +6,7 @@ export interface TermResult {
   content: string
   categories: string[]
   notion_page_id: string | null
+  priority: string
 }
 
 interface TermState {

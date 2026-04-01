@@ -6,6 +6,7 @@ export async function createNotionPage(term: {
   name: string;
   content: string;
   categories: string[];
+  priority: string;
 }): Promise<string> {
   const response = await client.pages.create({
     parent: { database_id: process.env.NOTION_DATABASE_ID as string },
@@ -17,7 +18,7 @@ export async function createNotionPage(term: {
         multi_select: term.categories.map((category) => ({ name: category })),
       },
       Priority: {
-        select: { name: 'Medium' },
+        select: { name: term.priority },
       },
     },
     children: [

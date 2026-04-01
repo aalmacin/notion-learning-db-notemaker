@@ -6,7 +6,7 @@ import { createNotionPage } from '@/lib/notion';
 
 export async function addToNotion(
   termId: number,
-  term: { name: string; content: string; categories: string[] },
+  term: { name: string; content: string; categories: string[]; priority: string },
 ): Promise<Term> {
   const pageId = await createNotionPage(term);
   const updated = updateTerm(termId, { notion_page_id: pageId });

@@ -18,7 +18,7 @@ function TermCard({ term }: { term: TermResultType }) {
   })
 
   const notionMutation = useMutation({
-    mutationFn: () => addToNotion(term.id, { name: term.name, content: term.content, categories: term.categories }),
+    mutationFn: () => addToNotion(term.id, { name: term.name, content: term.content, categories: term.categories, priority: term.priority }),
     onSuccess: updateTermInStore,
   })
 

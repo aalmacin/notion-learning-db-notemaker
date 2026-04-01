@@ -18,5 +18,6 @@ export async function explainTerm(rawName: string): Promise<Term> {
     content: explanation.content,
     categories: explanation.categories,
     notion_page_id: null,
+    priority: 'Medium',
   });
 }

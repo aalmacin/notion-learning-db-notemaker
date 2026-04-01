@@ -1,6 +1,8 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 
+export type Priority = 'High' | 'Medium' | 'Low';
+
 export type Term = {
   id: number;
   name: string;
@@ -8,6 +10,7 @@ export type Term = {
   categories: string[];
   created_at: string;
   notion_page_id: string | null;
+  priority: Priority;
 };
 
 export type Category = {
@@ -34,7 +37,8 @@ function getDb(): Database.Database {
       name TEXT NOT NULL UNIQUE,
       content TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      notion_page_id TEXT
+      notion_page_id TEXT,
+      priority TEXT NOT NULL DEFAULT 'Medium'
     );
 
     CREATE TABLE IF NOT EXISTS categories (
@@ -54,6 +58,13 @@ function getDb(): Database.Database {
     _db.exec('ALTER TABLE terms DROP COLUMN categories');
   } catch {
     // Already dropped or never existed
+  }
+
+  // Migrate: add priority column if it doesn't exist
+  try {
+    _db.exec("ALTER TABLE terms ADD COLUMN priority TEXT NOT NULL DEFAULT 'Medium'");
+  } catch {
+    // Already exists
   }
 
   return _db;
@@ -124,8 +135,8 @@ export function insertTerm(term: Omit<Term, 'id' | 'created_at'>): Term {
   const db = getDb();
   return db.transaction(() => {
     const row = db
-      .prepare('INSERT INTO terms (name, content, notion_page_id) VALUES (?, ?, ?) RETURNING *')
-      .get(term.name, term.content, term.notion_page_id ?? null) as TermRow;
+      .prepare('INSERT INTO terms (name, content, notion_page_id, priority) VALUES (?, ?, ?, ?) RETURNING *')
+      .get(term.name, term.content, term.notion_page_id ?? null, term.priority ?? 'Medium') as TermRow;
     const categoryIds = upsertCategories(db, term.categories);
     setTermCategories(db, row.id, categoryIds);
     return { ...row, categories: term.categories };
@@ -144,6 +155,7 @@ export function updateTerm(
     if (updates.name !== undefined) { fields.push('name = ?'); values.push(updates.name); }
     if (updates.content !== undefined) { fields.push('content = ?'); values.push(updates.content); }
     if (updates.notion_page_id !== undefined) { fields.push('notion_page_id = ?'); values.push(updates.notion_page_id); }
+    if (updates.priority !== undefined) { fields.push('priority = ?'); values.push(updates.priority); }
 
     let row: TermRow | undefined;
     if (fields.length > 0) {
