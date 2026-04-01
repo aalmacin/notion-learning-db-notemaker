@@ -94,7 +94,7 @@ export function getAllCategories(): Category[] {
 
 export function getTerm(name: string): Term | null {
   const db = getDb();
-  const row = db.prepare('SELECT * FROM terms WHERE name = ?').get(name) as TermRow | undefined;
+  const row = db.prepare('SELECT * FROM terms WHERE LOWER(name) = LOWER(?)').get(name) as TermRow | undefined;
   if (!row) return null;
   return { ...row, categories: getCategoriesForTerm(db, row.id) };
 }

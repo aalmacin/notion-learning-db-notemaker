@@ -1,16 +1,20 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import {
   useReactTable,
   getCoreRowModel,
   getSortedRowModel,
   getFilteredRowModel,
+  getExpandedRowModel,
+  getPaginationRowModel,
   createColumnHelper,
   flexRender,
   type SortingState,
   type ColumnFiltersState,
   type FilterFn,
+  type ExpandedState,
+  type PaginationState,
 } from '@tanstack/react-table';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
@@ -27,12 +31,17 @@ const globalFilterFn: FilterFn<Term> = (row, _columnId, filterValue: string) => 
   return name.includes(search) || categories.includes(search);
 };
 
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
+
 export function TermsTable({ initialData }: { initialData: Term[] }) {
   const queryClient = useQueryClient();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [expanded, setExpanded] = useState<ExpandedState>({});
+  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
+  const [notionSuccessId, setNotionSuccessId] = useState<number | null>(null);
 
   const { data = initialData } = useQuery({
     queryKey: queryKeys.terms.all(),
@@ -61,11 +70,28 @@ export function TermsTable({ initialData }: { initialData: Term[] }) {
   const addToNotionMutation = useMutation({
     mutationFn: (term: Term) =>
       addToNotion(term.id, { name: term.name, content: term.content, categories: term.categories }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.terms.all() }),
+    onSuccess: (_, term) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.terms.all() });
+      setNotionSuccessId(term.id);
+      setTimeout(() => setNotionSuccessId(null), 3000);
+    },
   });
 
   const columns = useMemo(
     () => [
+      columnHelper.display({
+        id: 'expand',
+        header: '',
+        cell: ({ row }) => (
+          <button
+            onClick={row.getToggleExpandedHandler()}
+            className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors w-5 text-center"
+            aria-label={row.getIsExpanded() ? 'Collapse' : 'Expand'}
+          >
+            {row.getIsExpanded() ? '▾' : '▸'}
+          </button>
+        ),
+      }),
       columnHelper.accessor('name', {
         header: 'Name',
         enableSorting: true,
@@ -116,49 +142,68 @@ export function TermsTable({ initialData }: { initialData: Term[] }) {
           const isDeleting = deleteMutation.isPending && deleteMutation.variables === term.id;
           const isAddingToNotion =
             addToNotionMutation.isPending && addToNotionMutation.variables?.id === term.id;
+          const isNotionSuccess = notionSuccessId === term.id;
 
           return (
-            <div className="flex gap-2">
-              <button
-                onClick={() => deleteMutation.mutate(term.id)}
-                disabled={isDeleting}
-                className="px-2 py-1 text-xs rounded bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50 transition-colors dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
-              >
-                {isDeleting ? 'Deleting…' : 'Delete'}
-              </button>
-              <button
-                onClick={() => addToNotionMutation.mutate(term)}
-                disabled={term.notion_page_id !== null || isAddingToNotion}
-                className="px-2 py-1 text-xs rounded bg-zinc-100 text-zinc-700 hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-              >
-                {isAddingToNotion ? 'Adding…' : 'Add to Notion'}
-              </button>
+            <div className="flex flex-col gap-1">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => deleteMutation.mutate(term.id)}
+                  disabled={isDeleting}
+                  className="px-2 py-1 text-xs rounded bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50 transition-colors dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
+                >
+                  {isDeleting ? 'Deleting…' : 'Delete'}
+                </button>
+                <button
+                  onClick={() => addToNotionMutation.mutate(term)}
+                  disabled={term.notion_page_id !== null || isAddingToNotion}
+                  className="px-2 py-1 text-xs rounded bg-zinc-100 text-zinc-700 hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                >
+                  {isAddingToNotion ? 'Adding…' : 'Add to Notion'}
+                </button>
+              </div>
+              {isNotionSuccess && (
+                <p className="text-xs text-green-600 dark:text-green-400">Added to Notion.</p>
+              )}
             </div>
           );
         },
       }),
     ],
-    [deleteMutation, addToNotionMutation]
+    [deleteMutation, addToNotionMutation, notionSuccessId]
   );
 
   const table = useReactTable({
     data: filteredData,
     columns,
-    state: { sorting, globalFilter, columnFilters },
+    state: { sorting, globalFilter, columnFilters, expanded, pagination },
     onSortingChange: setSorting,
-    onGlobalFilterChange: setGlobalFilter,
+    onGlobalFilterChange: (val) => {
+      setPagination((p) => ({ ...p, pageIndex: 0 }));
+      setGlobalFilter(val);
+    },
     onColumnFiltersChange: setColumnFilters,
+    onExpandedChange: setExpanded,
+    onPaginationChange: setPagination,
     globalFilterFn,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getRowCanExpand: () => true,
   });
 
   const toggleCategory = (cat: string) => {
+    setPagination((p) => ({ ...p, pageIndex: 0 }));
     setSelectedCategories((prev) =>
       prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
     );
   };
+
+  const { pageIndex, pageSize } = table.getState().pagination;
+  const pageCount = table.getPageCount();
+  const totalFiltered = table.getFilteredRowModel().rows.length;
 
   return (
     <div className="space-y-4">
@@ -188,7 +233,10 @@ export function TermsTable({ initialData }: { initialData: Term[] }) {
             ))}
             {selectedCategories.length > 0 && (
               <button
-                onClick={() => setSelectedCategories([])}
+                onClick={() => {
+                  setSelectedCategories([]);
+                  setPagination((p) => ({ ...p, pageIndex: 0 }));
+                }}
                 className="text-xs text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
               >
                 Clear
@@ -242,23 +290,100 @@ export function TermsTable({ initialData }: { initialData: Term[] }) {
               </tr>
             ) : (
               table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors">
-                  {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  ))}
-                </tr>
+                <Fragment key={row.id}>
+                  <tr
+                    className="hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors cursor-pointer"
+                    onClick={row.getToggleExpandedHandler()}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <td
+                        key={cell.id}
+                        className="px-4 py-3 text-zinc-700 dark:text-zinc-300"
+                        onClick={
+                          cell.column.id === 'actions'
+                            ? (e) => e.stopPropagation()
+                            : undefined
+                        }
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    ))}
+                  </tr>
+                  {row.getIsExpanded() && (
+                    <tr className="bg-zinc-50 dark:bg-zinc-950">
+                      <td colSpan={columns.length} className="px-6 py-4">
+                        <p className="text-sm leading-6 text-zinc-700 dark:text-zinc-300">
+                          {row.original.content}
+                        </p>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))
             )}
           </tbody>
         </table>
       </div>
 
-      <p className="text-xs text-zinc-400 dark:text-zinc-600">
-        {table.getRowModel().rows.length} of {data.length} term
-        {data.length !== 1 ? 's' : ''}
-      </p>
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <p className="text-xs text-zinc-400 dark:text-zinc-600">
+          {totalFiltered === data.length
+            ? `${data.length} term${data.length !== 1 ? 's' : ''}`
+            : `${totalFiltered} of ${data.length} term${data.length !== 1 ? 's' : ''}`}
+        </p>
+
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-zinc-500 dark:text-zinc-400">Per page</label>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                table.setPageSize(Number(e.target.value));
+                table.setPageIndex(0);
+              }}
+              className="text-xs border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 focus:outline-none"
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => table.setPageIndex(0)}
+              disabled={!table.getCanPreviousPage()}
+              className="px-2 py-1 text-xs rounded border border-zinc-200 dark:border-zinc-700 disabled:opacity-40 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+            >
+              «
+            </button>
+            <button
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+              className="px-2 py-1 text-xs rounded border border-zinc-200 dark:border-zinc-700 disabled:opacity-40 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+            >
+              ‹
+            </button>
+            <span className="text-xs text-zinc-500 dark:text-zinc-400 px-2">
+              {pageCount === 0 ? '0 / 0' : `${pageIndex + 1} / ${pageCount}`}
+            </span>
+            <button
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+              className="px-2 py-1 text-xs rounded border border-zinc-200 dark:border-zinc-700 disabled:opacity-40 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+            >
+              ›
+            </button>
+            <button
+              onClick={() => table.setPageIndex(pageCount - 1)}
+              disabled={!table.getCanNextPage()}
+              className="px-2 py-1 text-xs rounded border border-zinc-200 dark:border-zinc-700 disabled:opacity-40 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+            >
+              »
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

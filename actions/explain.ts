@@ -14,7 +14,7 @@ export async function explainTerm(rawName: string): Promise<Term> {
   const explanation = await explainTermWithAI(name);
 
   return insertTerm({
-    name: explanation.name.trim().toLowerCase(),
+    name: explanation.name.trim(),
     content: explanation.content,
     categories: explanation.categories,
     notion_page_id: null,
