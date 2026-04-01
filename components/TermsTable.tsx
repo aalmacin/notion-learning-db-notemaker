@@ -1,0 +1,264 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  createColumnHelper,
+  flexRender,
+  type SortingState,
+  type ColumnFiltersState,
+  type FilterFn,
+} from '@tanstack/react-table';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
+import { deleteTerm } from '@/actions/terms';
+import { addToNotion } from '@/actions/notion';
+import type { Term } from '@/lib/db';
+
+const columnHelper = createColumnHelper<Term>();
+
+const globalFilterFn: FilterFn<Term> = (row, _columnId, filterValue: string) => {
+  const search = filterValue.toLowerCase();
+  const name = row.original.name.toLowerCase();
+  const categories = row.original.categories.join(' ').toLowerCase();
+  return name.includes(search) || categories.includes(search);
+};
+
+export function TermsTable({ initialData }: { initialData: Term[] }) {
+  const queryClient = useQueryClient();
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [globalFilter, setGlobalFilter] = useState('');
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+
+  const { data = initialData } = useQuery({
+    queryKey: queryKeys.terms.all(),
+    queryFn: async () => initialData,
+    initialData,
+  });
+
+  const allCategories = useMemo(() => {
+    const set = new Set<string>();
+    data.forEach((term) => term.categories.forEach((c) => set.add(c)));
+    return Array.from(set).sort();
+  }, [data]);
+
+  const filteredData = useMemo(() => {
+    if (selectedCategories.length === 0) return data;
+    return data.filter((term) =>
+      selectedCategories.every((cat) => term.categories.includes(cat))
+    );
+  }, [data, selectedCategories]);
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => deleteTerm(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.terms.all() }),
+  });
+
+  const addToNotionMutation = useMutation({
+    mutationFn: (term: Term) =>
+      addToNotion(term.id, { name: term.name, content: term.content, categories: term.categories }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.terms.all() }),
+  });
+
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor('name', {
+        header: 'Name',
+        enableSorting: true,
+        cell: (info) => (
+          <span className="font-medium text-zinc-900 dark:text-zinc-50">{info.getValue()}</span>
+        ),
+      }),
+      columnHelper.accessor('categories', {
+        header: 'Categories',
+        enableSorting: false,
+        cell: (info) => (
+          <div className="flex flex-wrap gap-1">
+            {info.getValue().map((cat) => (
+              <span
+                key={cat}
+                className="px-2 py-0.5 text-xs rounded-full bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+              >
+                {cat}
+              </span>
+            ))}
+          </div>
+        ),
+      }),
+      columnHelper.accessor('created_at', {
+        header: 'Created',
+        enableSorting: true,
+        cell: (info) =>
+          new Date(info.getValue()).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          }),
+      }),
+      columnHelper.accessor('notion_page_id', {
+        header: 'Notion',
+        enableSorting: false,
+        cell: (info) => (
+          <span className={info.getValue() ? 'text-green-600' : 'text-zinc-400'}>
+            {info.getValue() ? '✓' : '—'}
+          </span>
+        ),
+      }),
+      columnHelper.display({
+        id: 'actions',
+        header: 'Actions',
+        cell: ({ row }) => {
+          const term = row.original;
+          const isDeleting = deleteMutation.isPending && deleteMutation.variables === term.id;
+          const isAddingToNotion =
+            addToNotionMutation.isPending && addToNotionMutation.variables?.id === term.id;
+
+          return (
+            <div className="flex gap-2">
+              <button
+                onClick={() => deleteMutation.mutate(term.id)}
+                disabled={isDeleting}
+                className="px-2 py-1 text-xs rounded bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50 transition-colors dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
+              >
+                {isDeleting ? 'Deleting…' : 'Delete'}
+              </button>
+              <button
+                onClick={() => addToNotionMutation.mutate(term)}
+                disabled={term.notion_page_id !== null || isAddingToNotion}
+                className="px-2 py-1 text-xs rounded bg-zinc-100 text-zinc-700 hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              >
+                {isAddingToNotion ? 'Adding…' : 'Add to Notion'}
+              </button>
+            </div>
+          );
+        },
+      }),
+    ],
+    [deleteMutation, addToNotionMutation]
+  );
+
+  const table = useReactTable({
+    data: filteredData,
+    columns,
+    state: { sorting, globalFilter, columnFilters },
+    onSortingChange: setSorting,
+    onGlobalFilterChange: setGlobalFilter,
+    onColumnFiltersChange: setColumnFilters,
+    globalFilterFn,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+  });
+
+  const toggleCategory = (cat: string) => {
+    setSelectedCategories((prev) =>
+      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-4 items-start">
+        <input
+          type="text"
+          placeholder="Search terms…"
+          value={globalFilter}
+          onChange={(e) => setGlobalFilter(e.target.value)}
+          className="flex-1 min-w-[200px] px-3 py-2 text-sm border border-zinc-200 rounded-lg bg-white dark:bg-zinc-900 dark:border-zinc-700 text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-300 dark:focus:ring-zinc-600"
+        />
+        {allCategories.length > 0 && (
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">Filter by category:</span>
+            {allCategories.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => toggleCategory(cat)}
+                className={`px-2 py-1 text-xs rounded-full border transition-colors ${
+                  selectedCategories.includes(cat)
+                    ? 'bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-50 dark:text-zinc-900 dark:border-zinc-50'
+                    : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400 dark:bg-zinc-900 dark:text-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-500'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+            {selectedCategories.length > 0 && (
+              <button
+                onClick={() => setSelectedCategories([])}
+                className="text-xs text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+        <table className="w-full text-sm">
+          <thead className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
+            {table.getHeaderGroups().map((headerGroup) => (
+              <tr key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <th
+                    key={header.id}
+                    className="px-4 py-3 text-left text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider"
+                  >
+                    {header.column.getCanSort() ? (
+                      <button
+                        onClick={header.column.getToggleSortingHandler()}
+                        className="flex items-center gap-1 hover:text-zinc-900 dark:hover:text-zinc-50 transition-colors"
+                      >
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                        <span className="text-zinc-300 dark:text-zinc-600">
+                          {header.column.getIsSorted() === 'asc'
+                            ? '↑'
+                            : header.column.getIsSorted() === 'desc'
+                              ? '↓'
+                              : '↕'}
+                        </span>
+                      </button>
+                    ) : (
+                      flexRender(header.column.columnDef.header, header.getContext())
+                    )}
+                  </th>
+                ))}
+              </tr>
+            ))}
+          </thead>
+          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800 bg-white dark:bg-black">
+            {table.getRowModel().rows.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={columns.length}
+                  className="px-4 py-8 text-center text-zinc-400 dark:text-zinc-600"
+                >
+                  No terms found.
+                </td>
+              </tr>
+            ) : (
+              table.getRowModel().rows.map((row) => (
+                <tr key={row.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors">
+                  {row.getVisibleCells().map((cell) => (
+                    <td key={cell.id} className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="text-xs text-zinc-400 dark:text-zinc-600">
+        {table.getRowModel().rows.length} of {data.length} term
+        {data.length !== 1 ? 's' : ''}
+      </p>
+    </div>
+  );
+}
