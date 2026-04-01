@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useStore } from '@tanstack/react-store'
 import { useMutation } from '@tanstack/react-query'
 import { termStore, updateTermInStore, removeTermFromStore, type TermResult as TermResultType } from '@/store/termStore'
@@ -51,6 +52,13 @@ function TermCard({ term }: { term: TermResultType }) {
       )}
 
       <div className="flex flex-wrap items-center gap-2">
+        <Link
+          href={`/terms/${term.id}`}
+          className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+        >
+          Open
+        </Link>
+
         <button
           onClick={() => regenerateMutation.mutate()}
           disabled={regenerateMutation.isPending}

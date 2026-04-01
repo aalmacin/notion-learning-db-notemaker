@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment, useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   useReactTable,
   getCoreRowModel,
@@ -245,6 +246,15 @@ export function TermsTable({ initialData, initialCategories }: { initialData: Te
           return <span className={`text-xs font-medium ${color}`}>{val}</span>;
         },
       }),
+      columnHelper.accessor('explained', {
+        header: 'Explained',
+        enableSorting: true,
+        cell: (info) => (
+          <span className={info.getValue() ? 'text-green-600' : 'text-zinc-400'}>
+            {info.getValue() ? '✓' : '—'}
+          </span>
+        ),
+      }),
       columnHelper.accessor('notion_page_id', {
         header: 'Notion',
         enableSorting: false,
@@ -267,6 +277,13 @@ export function TermsTable({ initialData, initialCategories }: { initialData: Te
           return (
             <div className="flex flex-col gap-1">
               <div className="flex gap-2">
+                <Link
+                  href={`/terms/${term.id}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="px-2 py-1 text-xs rounded bg-zinc-100 text-zinc-700 hover:bg-zinc-200 transition-colors dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                >
+                  Open
+                </Link>
                 <button
                   onClick={() => deleteMutation.mutate(term.id)}
                   disabled={isDeleting}
