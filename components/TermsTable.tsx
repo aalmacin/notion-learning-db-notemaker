@@ -20,7 +20,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { deleteTerm } from '@/actions/terms';
 import { addToNotion } from '@/actions/notion';
-import type { Term } from '@/lib/db';
+import { updateTermCategories } from '@/actions/categories';
+import type { Term, Category } from '@/lib/db';
 
 const columnHelper = createColumnHelper<Term>();
 
@@ -33,7 +34,57 @@ const globalFilterFn: FilterFn<Term> = (row, _columnId, filterValue: string) => 
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
-export function TermsTable({ initialData }: { initialData: Term[] }) {
+function CategoryEditor({ term, allCategories, onSaved }: {
+  term: Term;
+  allCategories: Category[];
+  onSaved: (updated: Term) => void;
+}) {
+  const [selected, setSelected] = useState<string[]>(term.categories);
+
+  const mutation = useMutation({
+    mutationFn: () => updateTermCategories(term.id, selected),
+    onSuccess: onSaved,
+  });
+
+  const toggle = (name: string) =>
+    setSelected((prev) => prev.includes(name) ? prev.filter((c) => c !== name) : [...prev, name]);
+
+  return (
+    <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-700 space-y-3">
+      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Categories</p>
+      <div className="flex flex-wrap gap-2">
+        {allCategories.map((cat) => (
+          <button
+            key={cat.id}
+            type="button"
+            onClick={() => toggle(cat.name)}
+            className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+              selected.includes(cat.name)
+                ? 'bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-50 dark:text-zinc-900 dark:border-zinc-50'
+                : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400 dark:bg-zinc-900 dark:text-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-500'
+            }`}
+          >
+            {cat.name}
+          </button>
+        ))}
+      </div>
+      {mutation.error && (
+        <p className="text-xs text-red-600 dark:text-red-400">
+          {mutation.error instanceof Error ? mutation.error.message : 'Failed to save'}
+        </p>
+      )}
+      <button
+        onClick={() => mutation.mutate()}
+        disabled={mutation.isPending}
+        className="px-3 py-1.5 text-xs font-medium rounded-lg bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      >
+        {mutation.isPending ? 'Saving…' : 'Save categories'}
+      </button>
+    </div>
+  );
+}
+
+export function TermsTable({ initialData, initialCategories }: { initialData: Term[]; initialCategories: Category[] }) {
   const queryClient = useQueryClient();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
@@ -49,7 +100,13 @@ export function TermsTable({ initialData }: { initialData: Term[] }) {
     initialData,
   });
 
-  const allCategories = useMemo(() => {
+  const { data: allCategories = initialCategories } = useQuery({
+    queryKey: queryKeys.categories.all(),
+    queryFn: async () => initialCategories,
+    initialData: initialCategories,
+  });
+
+  const filterCategoryNames = useMemo(() => {
     const set = new Set<string>();
     data.forEach((term) => term.categories.forEach((c) => set.add(c)));
     return Array.from(set).sort();
@@ -70,8 +127,10 @@ export function TermsTable({ initialData }: { initialData: Term[] }) {
   const addToNotionMutation = useMutation({
     mutationFn: (term: Term) =>
       addToNotion(term.id, { name: term.name, content: term.content, categories: term.categories }),
-    onSuccess: (_, term) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.terms.all() });
+    onSuccess: (updatedTerm, term) => {
+      queryClient.setQueryData<Term[]>(queryKeys.terms.all(), (prev = []) =>
+        prev.map((t) => (t.id === term.id ? updatedTerm : t))
+      );
       setNotionSuccessId(term.id);
       setTimeout(() => setNotionSuccessId(null), 3000);
     },
@@ -215,10 +274,10 @@ export function TermsTable({ initialData }: { initialData: Term[] }) {
           onChange={(e) => setGlobalFilter(e.target.value)}
           className="flex-1 min-w-[200px] px-3 py-2 text-sm border border-zinc-200 rounded-lg bg-white dark:bg-zinc-900 dark:border-zinc-700 text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-300 dark:focus:ring-zinc-600"
         />
-        {allCategories.length > 0 && (
+        {filterCategoryNames.length > 0 && (
           <div className="flex flex-wrap gap-2 items-center">
             <span className="text-xs text-zinc-500 dark:text-zinc-400">Filter by category:</span>
-            {allCategories.map((cat) => (
+            {filterCategoryNames.map((cat) => (
               <button
                 key={cat}
                 onClick={() => toggleCategory(cat)}
@@ -315,6 +374,15 @@ export function TermsTable({ initialData }: { initialData: Term[] }) {
                         <p className="text-sm leading-6 text-zinc-700 dark:text-zinc-300">
                           {row.original.content}
                         </p>
+                        <CategoryEditor
+                          term={row.original}
+                          allCategories={allCategories}
+                          onSaved={(updated) =>
+                            queryClient.setQueryData<Term[]>(queryKeys.terms.all(), (prev = []) =>
+                              prev.map((t) => (t.id === updated.id ? updated : t))
+                            )
+                          }
+                        />
                       </td>
                     </tr>
                   )}

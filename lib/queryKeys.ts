@@ -3,4 +3,7 @@ export const queryKeys = {
     all: () => ['terms'] as const,
     detail: (id: number) => ['terms', id] as const,
   },
+  categories: {
+    all: () => ['categories'] as const,
+  },
 }

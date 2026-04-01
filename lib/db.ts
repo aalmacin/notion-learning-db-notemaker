@@ -169,3 +169,17 @@ export function updateTerm(
 export function deleteTerm(id: number): void {
   getDb().prepare('DELETE FROM terms WHERE id = ?').run(id);
 }
+
+export function insertCategory(name: string): Category {
+  const db = getDb();
+  db.prepare('INSERT OR IGNORE INTO categories (name) VALUES (?)').run(name);
+  return db.prepare('SELECT * FROM categories WHERE name = ?').get(name) as Category;
+}
+
+export function deleteCategory(id: number): void {
+  getDb().prepare('DELETE FROM categories WHERE id = ?').run(id);
+}
+
+export function updateTermCategories(termId: number, categories: string[]): Term | null {
+  return updateTerm(termId, { categories });
+}
