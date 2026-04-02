@@ -140,6 +140,7 @@ export function TermsTable({ initialData, initialCategories, initialCategory }: 
   const [notionSuccessId, setNotionSuccessId] = useState<number | null>(null);
   const [notionFilter, setNotionFilter] = useState<'all' | 'pending' | 'added'>('pending');
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<number | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState(false);
 
   const { data = initialData } = useQuery({
     queryKey: queryKeys.terms.all(),
@@ -174,6 +175,8 @@ export function TermsTable({ initialData, initialCategories, initialCategory }: 
       queryClient.setQueryData<Term[]>(queryKeys.terms.all(), (prev = []) =>
         prev.filter((t) => t.id !== id)
       );
+      setDeleteSuccess(true);
+      setTimeout(() => setDeleteSuccess(false), 3000);
     },
   });
 
@@ -368,6 +371,9 @@ export function TermsTable({ initialData, initialCategories, initialCategory }: 
 
   return (
     <div className="space-y-4">
+      {deleteSuccess && (
+        <p className="text-sm text-green-600 dark:text-green-400">Term deleted successfully.</p>
+      )}
       <div className="flex flex-wrap gap-4 items-start">
         <input
           type="text"

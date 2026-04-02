@@ -11,6 +11,7 @@ export function CategoriesManager({ initialData }: { initialData: Category[] }) 
   const queryClient = useQueryClient();
   const [newName, setNewName] = useState('');
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
+  const [removeSuccess, setRemoveSuccess] = useState(false);
 
   const { data: categories = initialData } = useQuery({
     queryKey: queryKeys.categories.all(),
@@ -34,6 +35,8 @@ export function CategoriesManager({ initialData }: { initialData: Category[] }) 
       queryClient.setQueryData<Category[]>(queryKeys.categories.all(), (prev = []) =>
         prev.filter((c) => c.id !== id)
       );
+      setRemoveSuccess(true);
+      setTimeout(() => setRemoveSuccess(false), 3000);
     },
   });
 
@@ -45,6 +48,9 @@ export function CategoriesManager({ initialData }: { initialData: Category[] }) 
 
   return (
     <div className="space-y-6">
+      {removeSuccess && (
+        <p className="text-sm text-green-600 dark:text-green-400">Category removed successfully.</p>
+      )}
       <form onSubmit={handleAdd} className="flex gap-2">
         <input
           value={newName}

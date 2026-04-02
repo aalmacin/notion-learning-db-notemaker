@@ -18,7 +18,9 @@ function TermCard({ term }: { term: TermResultType }) {
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteTerm(term.id),
-    onSuccess: () => removeTermFromStore(term.id),
+    onSuccess: () => {
+      removeTermFromStore(term.id);
+    },
   })
 
   const notionMutation = useMutation({
