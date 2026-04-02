@@ -10,6 +10,7 @@ import type { Category } from '@/lib/db';
 export function CategoriesManager({ initialData }: { initialData: Category[] }) {
   const queryClient = useQueryClient();
   const [newName, setNewName] = useState('');
+  const [confirmingId, setConfirmingId] = useState<number | null>(null);
 
   const { data: categories = initialData } = useQuery({
     queryKey: queryKeys.categories.all(),
@@ -74,6 +75,7 @@ export function CategoriesManager({ initialData }: { initialData: Category[] }) 
         ) : (
           categories.map((cat) => {
             const isRemoving = removeMutation.isPending && removeMutation.variables === cat.id;
+            const isConfirming = confirmingId === cat.id;
             return (
               <li key={cat.id} className="flex items-center justify-between px-4 py-3">
                 <span className="text-sm text-zinc-800 dark:text-zinc-200">{cat.name}</span>
@@ -84,13 +86,31 @@ export function CategoriesManager({ initialData }: { initialData: Category[] }) 
                   >
                     View Terms
                   </Link>
-                  <button
-                    onClick={() => removeMutation.mutate(cat.id)}
-                    disabled={isRemoving}
-                    className="text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400 disabled:opacity-50 transition-colors"
-                  >
-                    {isRemoving ? 'Removing…' : 'Remove'}
-                  </button>
+                  {isConfirming ? (
+                    <>
+                      <button
+                        onClick={() => { removeMutation.mutate(cat.id); setConfirmingId(null); }}
+                        disabled={isRemoving}
+                        className="text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400 disabled:opacity-50 transition-colors"
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        onClick={() => setConfirmingId(null)}
+                        className="text-xs text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmingId(cat.id)}
+                      disabled={isRemoving}
+                      className="text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400 disabled:opacity-50 transition-colors"
+                    >
+                      {isRemoving ? 'Removing…' : 'Remove'}
+                    </button>
+                  )}
                 </div>
               </li>
             );

@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { useStore } from '@tanstack/react-store'
 import { useMutation } from '@tanstack/react-query'
@@ -8,6 +9,8 @@ import { regenerateTerm, deleteTerm } from '@/actions/terms'
 import { addToNotion } from '@/actions/notion'
 
 function TermCard({ term }: { term: TermResultType }) {
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
   const regenerateMutation = useMutation({
     mutationFn: () => regenerateTerm(term.id, term.name),
     onSuccess: updateTermInStore,
@@ -67,13 +70,31 @@ function TermCard({ term }: { term: TermResultType }) {
           {regenerateMutation.isPending ? 'Regenerating…' : 'Regenerate'}
         </button>
 
-        <button
-          onClick={() => deleteMutation.mutate()}
-          disabled={deleteMutation.isPending}
-          className="rounded-lg border border-red-300 dark:border-red-800 px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
-        </button>
+        {confirmingDelete ? (
+          <>
+            <button
+              onClick={() => { deleteMutation.mutate(); setConfirmingDelete(false); }}
+              disabled={deleteMutation.isPending}
+              className="rounded-lg border border-red-300 dark:border-red-800 px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Confirm
+            </button>
+            <button
+              onClick={() => setConfirmingDelete(false)}
+              className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={() => setConfirmingDelete(true)}
+            disabled={deleteMutation.isPending}
+            className="rounded-lg border border-red-300 dark:border-red-800 px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Delete
+          </button>
+        )}
 
         <button
           onClick={() => notionMutation.mutate()}

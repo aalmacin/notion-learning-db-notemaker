@@ -139,6 +139,7 @@ export function TermsTable({ initialData, initialCategories, initialCategory }: 
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
   const [notionSuccessId, setNotionSuccessId] = useState<number | null>(null);
   const [notionFilter, setNotionFilter] = useState<'all' | 'pending' | 'added'>('pending');
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<number | null>(null);
 
   const { data = initialData } = useQuery({
     queryKey: queryKeys.terms.all(),
@@ -169,7 +170,11 @@ export function TermsTable({ initialData, initialCategories, initialCategory }: 
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => deleteTerm(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.terms.all() }),
+    onSuccess: (_, id) => {
+      queryClient.setQueryData<Term[]>(queryKeys.terms.all(), (prev = []) =>
+        prev.filter((t) => t.id !== id)
+      );
+    },
   });
 
   const addToNotionMutation = useMutation({
@@ -273,6 +278,7 @@ export function TermsTable({ initialData, initialCategories, initialCategory }: 
           const isAddingToNotion =
             addToNotionMutation.isPending && addToNotionMutation.variables?.id === term.id;
           const isNotionSuccess = notionSuccessId === term.id;
+          const isConfirmingDelete = confirmingDeleteId === term.id;
 
           return (
             <div className="flex flex-col gap-1">
@@ -284,13 +290,31 @@ export function TermsTable({ initialData, initialCategories, initialCategory }: 
                 >
                   Open
                 </Link>
-                <button
-                  onClick={() => deleteMutation.mutate(term.id)}
-                  disabled={isDeleting}
-                  className="px-2 py-1 text-xs rounded bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50 transition-colors dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
-                >
-                  {isDeleting ? 'Deleting…' : 'Delete'}
-                </button>
+                {isConfirmingDelete ? (
+                  <>
+                    <button
+                      onClick={() => { deleteMutation.mutate(term.id); setConfirmingDeleteId(null); }}
+                      disabled={isDeleting}
+                      className="px-2 py-1 text-xs rounded bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50 transition-colors dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
+                    >
+                      Confirm
+                    </button>
+                    <button
+                      onClick={() => setConfirmingDeleteId(null)}
+                      className="px-2 py-1 text-xs rounded bg-zinc-100 text-zinc-700 hover:bg-zinc-200 transition-colors dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => setConfirmingDeleteId(term.id)}
+                    disabled={isDeleting}
+                    className="px-2 py-1 text-xs rounded bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50 transition-colors dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
+                  >
+                    Delete
+                  </button>
+                )}
                 <button
                   onClick={() => addToNotionMutation.mutate(term)}
                   disabled={term.notion_page_id !== null || isAddingToNotion}
@@ -307,7 +331,7 @@ export function TermsTable({ initialData, initialCategories, initialCategory }: 
         },
       }),
     ],
-    [deleteMutation, addToNotionMutation, notionSuccessId]
+    [deleteMutation, addToNotionMutation, notionSuccessId, confirmingDeleteId, setConfirmingDeleteId]
   );
 
   const table = useReactTable({
