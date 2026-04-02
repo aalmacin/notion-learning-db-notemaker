@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { addCategory, removeCategory } from '@/actions/categories';
@@ -76,13 +77,21 @@ export function CategoriesManager({ initialData }: { initialData: Category[] }) 
             return (
               <li key={cat.id} className="flex items-center justify-between px-4 py-3">
                 <span className="text-sm text-zinc-800 dark:text-zinc-200">{cat.name}</span>
-                <button
-                  onClick={() => removeMutation.mutate(cat.id)}
-                  disabled={isRemoving}
-                  className="text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400 disabled:opacity-50 transition-colors"
-                >
-                  {isRemoving ? 'Removing…' : 'Remove'}
-                </button>
+                <div className="flex items-center gap-3">
+                  <Link
+                    href={`/terms?category=${encodeURIComponent(cat.name)}`}
+                    className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+                  >
+                    View Terms
+                  </Link>
+                  <button
+                    onClick={() => removeMutation.mutate(cat.id)}
+                    disabled={isRemoving}
+                    className="text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400 disabled:opacity-50 transition-colors"
+                  >
+                    {isRemoving ? 'Removing…' : 'Remove'}
+                  </button>
+                </div>
               </li>
             );
           })

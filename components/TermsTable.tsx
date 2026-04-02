@@ -129,12 +129,12 @@ function PriorityEditor({ term, onSaved }: { term: Term; onSaved: (updated: Term
   );
 }
 
-export function TermsTable({ initialData, initialCategories }: { initialData: Term[]; initialCategories: Category[] }) {
+export function TermsTable({ initialData, initialCategories, initialCategory }: { initialData: Term[]; initialCategories: Category[]; initialCategory?: string }) {
   const queryClient = useQueryClient();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(initialCategory ? [initialCategory] : []);
   const [expanded, setExpanded] = useState<ExpandedState>({});
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
   const [notionSuccessId, setNotionSuccessId] = useState<number | null>(null);

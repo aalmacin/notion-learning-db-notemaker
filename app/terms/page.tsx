@@ -2,9 +2,15 @@ import Link from 'next/link';
 import { getAllTerms, getAllCategories } from '@/lib/db';
 import { TermsTable } from '@/components/TermsTable';
 
-export default function TermsPage() {
+export default async function TermsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const { category } = await searchParams;
   const terms = getAllTerms();
   const categories = getAllCategories();
+  const initialCategory = typeof category === 'string' ? category : undefined;
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black p-8">
@@ -24,7 +30,7 @@ export default function TermsPage() {
             Manage Categories
           </Link>
         </div>
-        <TermsTable initialData={terms} initialCategories={categories} />
+        <TermsTable initialData={terms} initialCategories={categories} initialCategory={initialCategory} />
       </div>
     </div>
   );
