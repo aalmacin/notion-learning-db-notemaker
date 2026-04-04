@@ -8,7 +8,7 @@ export async function explainTerm(rawName: string): Promise<Term> {
   const name = rawName.trim().toLowerCase();
   if (!name) throw new Error('Term name is required');
 
-  const cached = getTerm(name);
+  const cached = await getTerm(name);
   if (cached) return cached;
 
   const explanation = await explainTermWithAI(name);

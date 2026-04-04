@@ -18,12 +18,12 @@ export async function submitPreRefinement(
   termId: number,
   userExplanation: string,
 ): Promise<ConceptRefinement> {
-  const term = getTermById(termId);
+  const term = await getTermById(termId);
   if (!term) throw new Error('Term not found');
 
-  const refinement = createRefinement(termId, userExplanation);
+  const refinement = await createRefinement(termId, userExplanation);
   const result = await evaluatePreRefinement(term.name, userExplanation);
-  const updated = updatePreRefinementResult(refinement.id, result.accuracy, result.review);
+  const updated = await updatePreRefinementResult(refinement.id, result.accuracy, result.review);
 
   revalidatePath(`/terms/${termId}`);
   return updated;
@@ -34,11 +34,11 @@ export async function submitRefinement(
   termId: number,
   userExplanation: string,
 ): Promise<ConceptRefinement> {
-  const term = getTermById(termId);
+  const term = await getTermById(termId);
   if (!term) throw new Error('Term not found');
 
   const result = await evaluateRefinement(term.name, userExplanation);
-  const updated = updateRefinementData(refinementId, {
+  const updated = await updateRefinementData(refinementId, {
     refinement: userExplanation,
     refinement_accuracy: result.accuracy,
     refinement_review: result.review,
@@ -52,10 +52,10 @@ export async function submitRefinement(
 }
 
 export async function addRefinementToNotion(termId: number, refinementId: number): Promise<void> {
-  const term = getTermById(termId);
+  const term = await getTermById(termId);
   if (!term) throw new Error('Term not found');
 
-  const refinement = getRefinementById(refinementId);
+  const refinement = await getRefinementById(refinementId);
   if (
     !refinement?.refinement ||
     !refinement.refinement_formatted_note ||
@@ -72,7 +72,7 @@ export async function addRefinementToNotion(termId: number, refinementId: number
       categories: term.categories,
       priority: term.priority,
     });
-    updateTerm(termId, { notion_page_id: pageId });
+    await updateTerm(termId, { notion_page_id: pageId });
   }
 
   await appendRefinementToNotionPage(
@@ -90,7 +90,7 @@ export async function addRefinementToNotion(termId: number, refinementId: number
 }
 
 export async function removeRefinement(id: number, termId: number): Promise<void> {
-  deleteConceptRefinement(id);
+  await deleteConceptRefinement(id);
   revalidatePath(`/terms/${termId}`);
   revalidatePath('/terms');
 }

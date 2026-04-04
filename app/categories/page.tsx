@@ -2,8 +2,8 @@ import Link from 'next/link';
 import { getAllCategories } from '@/lib/db';
 import { CategoriesManager } from '@/components/CategoriesManager';
 
-export default function CategoriesPage() {
-  const categories = getAllCategories();
+export default async function CategoriesPage() {
+  const categories = await getAllCategories();
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black p-8">

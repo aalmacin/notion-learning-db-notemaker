@@ -6,12 +6,12 @@ import { revalidatePath } from 'next/cache';
 import type { Term, Priority } from '@/lib/db';
 
 export async function deleteTerm(id: number): Promise<void> {
-  dbDeleteTerm(id);
+  await dbDeleteTerm(id);
   revalidatePath('/terms');
 }
 
 export async function updateTermPriority(id: number, priority: Priority): Promise<Term> {
-  const updated = updateTerm(id, { priority });
+  const updated = await updateTerm(id, { priority });
   if (!updated) throw new Error('Term not found');
   revalidatePath('/terms');
   return updated;
@@ -20,7 +20,7 @@ export async function updateTermPriority(id: number, priority: Priority): Promis
 export async function regenerateTerm(id: number, name: string): Promise<Term> {
   const explanation = await explainTermWithAI(name);
 
-  const updated = updateTerm(id, {
+  const updated = await updateTerm(id, {
     content: explanation.content,
     categories: explanation.categories,
   });

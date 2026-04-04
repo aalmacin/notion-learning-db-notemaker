@@ -9,7 +9,7 @@ export async function addToNotion(
   term: { name: string; content: string; categories: string[]; priority: string },
 ): Promise<Term> {
   const pageId = await createNotionPage(term);
-  const updated = updateTerm(termId, { notion_page_id: pageId });
+  const updated = await updateTerm(termId, { notion_page_id: pageId });
 
   if (!updated) {
     throw new Error(`Term ${termId} not found`);
