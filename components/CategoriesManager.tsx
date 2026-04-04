@@ -6,6 +6,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { addCategory, removeCategory } from '@/actions/categories';
 import type { Category } from '@/lib/db';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 export function CategoriesManager({ initialData }: { initialData: Category[] }) {
   const queryClient = useQueryClient();
@@ -52,19 +54,18 @@ export function CategoriesManager({ initialData }: { initialData: Category[] }) 
         <p className="text-sm text-green-600 dark:text-green-400">Category removed successfully.</p>
       )}
       <form onSubmit={handleAdd} className="flex gap-2">
-        <input
+        <Input
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           placeholder="New category name…"
-          className="flex-1 px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-300 dark:focus:ring-zinc-600"
+          className="flex-1"
         />
-        <button
+        <Button
           type="submit"
           disabled={addMutation.isPending || !newName.trim()}
-          className="px-4 py-2 text-sm font-medium rounded-lg bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {addMutation.isPending ? 'Adding…' : 'Add'}
-        </button>
+        </Button>
       </form>
 
       {addMutation.error && (
@@ -94,28 +95,31 @@ export function CategoriesManager({ initialData }: { initialData: Category[] }) 
                   </Link>
                   {isConfirming ? (
                     <>
-                      <button
+                      <Button
+                        variant="destructive"
+                        size="xs"
                         onClick={() => { removeMutation.mutate(cat.id); setConfirmingId(null); }}
                         disabled={isRemoving}
-                        className="text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400 disabled:opacity-50 transition-colors"
                       >
                         Confirm
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="xs"
                         onClick={() => setConfirmingId(null)}
-                        className="text-xs text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
                       >
                         Cancel
-                      </button>
+                      </Button>
                     </>
                   ) : (
-                    <button
+                    <Button
+                      variant="destructive"
+                      size="xs"
                       onClick={() => setConfirmingId(cat.id)}
                       disabled={isRemoving}
-                      className="text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400 disabled:opacity-50 transition-colors"
                     >
                       {isRemoving ? 'Removing…' : 'Remove'}
-                    </button>
+                    </Button>
                   )}
                 </div>
               </li>

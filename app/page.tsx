@@ -3,7 +3,7 @@ import { TermResult } from '@/components/TermResult'
 
 export default function Home() {
   return (
-    <main className="max-w-2xl mx-auto px-4 py-8 sm:px-6 sm:py-12 flex flex-col gap-8">
+    <main className="w-full max-w-[768px] mx-auto px-4 sm:px-8 py-8 sm:py-12 flex flex-col gap-8">
       <TermForm />
       <TermResult />
     </main>

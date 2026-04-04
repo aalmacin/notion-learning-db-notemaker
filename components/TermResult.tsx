@@ -7,6 +7,9 @@ import { useMutation } from '@tanstack/react-query'
 import { termStore, updateTermInStore, removeTermFromStore, type TermResult as TermResultType } from '@/store/termStore'
 import { regenerateTerm, deleteTerm } from '@/actions/terms'
 import { addToNotion } from '@/actions/notion'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 
 function TermCard({ term }: { term: TermResultType }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -37,12 +40,7 @@ function TermCard({ term }: { term: TermResultType }) {
         {term.categories.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-2">
             {term.categories.map((cat: string) => (
-              <span
-                key={cat}
-                className="text-xs font-medium px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
-              >
-                {cat}
-              </span>
+              <Badge key={cat} variant="secondary">{cat}</Badge>
             ))}
           </div>
         )}
@@ -59,52 +57,57 @@ function TermCard({ term }: { term: TermResultType }) {
       <div className="flex flex-wrap items-center gap-2">
         <Link
           href={`/terms/${term.id}`}
-          className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
         >
           Open
         </Link>
 
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => regenerateMutation.mutate()}
           disabled={regenerateMutation.isPending}
-          className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {regenerateMutation.isPending ? 'Regenerating…' : 'Regenerate'}
-        </button>
+        </Button>
 
         {confirmingDelete ? (
           <>
-            <button
+            <Button
+              variant="destructive"
+              size="sm"
               onClick={() => { deleteMutation.mutate(); setConfirmingDelete(false); }}
               disabled={deleteMutation.isPending}
-              className="rounded-lg border border-red-300 dark:border-red-800 px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               Confirm
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setConfirmingDelete(false)}
-              className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
             >
               Cancel
-            </button>
+            </Button>
           </>
         ) : (
-          <button
+          <Button
+            variant="destructive"
+            size="sm"
             onClick={() => setConfirmingDelete(true)}
             disabled={deleteMutation.isPending}
-            className="rounded-lg border border-red-300 dark:border-red-800 px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             Delete
-          </button>
+          </Button>
         )}
 
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => notionMutation.mutate()}
           disabled={notionMutation.isPending || term.notion_page_id !== null}
-          className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {notionMutation.isPending ? 'Adding…' : term.notion_page_id !== null ? 'Added to Notion' : 'Add to Notion'}
-        </button>
+        </Button>
 
         {notionMutation.isSuccess && (
           <p className="text-sm text-green-600 dark:text-green-400">Successfully added to Notion.</p>

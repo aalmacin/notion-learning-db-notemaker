@@ -9,6 +9,10 @@ import {
   submitRefinement,
   addRefinementToNotion,
 } from '@/actions/refinements';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 type Props = {
   term: Term;
@@ -128,21 +132,17 @@ export function TermDetailPage({ term, initialRefinements }: Props) {
         <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 sm:p-6 space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             {term.categories.map((cat) => (
-              <span
-                key={cat}
-                className="px-2 py-0.5 text-xs rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
-              >
-                {cat}
-              </span>
+              <Badge key={cat} variant="secondary">{cat}</Badge>
             ))}
             <span
-              className={`ml-auto text-xs font-medium ${
+              className={cn(
+                'ml-auto text-xs font-medium',
                 term.priority === 'High'
                   ? 'text-red-600 dark:text-red-400'
                   : term.priority === 'Low'
                     ? 'text-zinc-400 dark:text-zinc-500'
                     : 'text-yellow-600 dark:text-yellow-400'
-              }`}
+              )}
             >
               {term.priority}
             </span>
@@ -181,23 +181,22 @@ export function TermDetailPage({ term, initialRefinements }: Props) {
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
                 Explain <strong>{term.name}</strong> without looking anything up.
               </p>
-              <textarea
+              <Textarea
                 value={preText}
                 onChange={(e) => setPreText(e.target.value)}
                 rows={5}
                 placeholder="Write everything you know about this concept…"
-                className="w-full px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-700 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-300 dark:focus:ring-zinc-600 resize-none"
+                className="resize-none"
               />
               {error && (
                 <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
               )}
-              <button
+              <Button
                 onClick={handleSubmitPre}
                 disabled={!preText.trim() || isPendingPre}
-                className="px-4 py-2 text-sm font-medium rounded-lg bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 {isPendingPre ? 'Evaluating…' : 'Submit'}
-              </button>
+              </Button>
             </div>
           )}
 
@@ -242,23 +241,22 @@ export function TermDetailPage({ term, initialRefinements }: Props) {
                   {/* Form — only on latest incomplete attempt */}
                   {isLatest && isAwaitingRefinement(viewing) && (
                     <>
-                      <textarea
+                      <Textarea
                         value={refinementText}
                         onChange={(e) => setRefinementText(e.target.value)}
                         rows={5}
                         placeholder="Explain the concept again after researching…"
-                        className="w-full px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-700 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-300 dark:focus:ring-zinc-600 resize-none"
+                        className="resize-none"
                       />
                       {error && (
                         <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
                       )}
-                      <button
+                      <Button
                         onClick={handleSubmitRefinement}
                         disabled={!refinementText.trim() || isPendingRefinement}
-                        className="px-4 py-2 text-sm font-medium rounded-lg bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                       >
                         {isPendingRefinement ? 'Evaluating…' : 'Submit'}
-                      </button>
+                      </Button>
                     </>
                   )}
 
@@ -304,19 +302,18 @@ export function TermDetailPage({ term, initialRefinements }: Props) {
                       {/* Actions — only on latest */}
                       {isLatest && (
                         <div className="flex flex-wrap items-center gap-3 pt-1">
-                          <button
+                          <Button
                             onClick={() => handleAddToNotion(viewing.id)}
                             disabled={isPendingNotion || notionDone}
-                            className="px-4 py-2 text-sm font-medium rounded-lg bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                           >
                             {isPendingNotion ? 'Adding…' : notionDone ? 'Added to Notion ✓' : 'Add to Notion'}
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            variant="outline"
                             onClick={handleStartNewAttempt}
-                            className="px-4 py-2 text-sm font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
                           >
                             Start New Attempt
-                          </button>
+                          </Button>
                           {error && (
                             <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
                           )}

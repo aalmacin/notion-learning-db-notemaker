@@ -5,6 +5,9 @@ import { useForm } from '@tanstack/react-form'
 import { useMutation } from '@tanstack/react-query'
 import { explainTerm } from '@/actions/explain'
 import { setActiveTerm, setActiveTerms } from '@/store/termStore'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 
 type Mode = 'single' | 'multiple'
 
@@ -54,14 +57,11 @@ export function TermForm() {
     },
   })
 
-  const inputClass =
-    'rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-50 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-500'
-
   return (
-    <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 sm:p-6">
-      <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50 mb-4">Explain a Term</h2>
+    <div className="bg-card rounded-xl border border-border p-4 sm:p-6">
+      <h2 className="text-xl font-semibold text-card-foreground mb-4">Explain a Term</h2>
 
-      <div className="flex gap-1 mb-4 border-b border-zinc-200 dark:border-zinc-800">
+      <div className="flex gap-1 mb-4 border-b border-border">
         {(['single', 'multiple'] as const).map((tab) => (
           <button
             key={tab}
@@ -69,8 +69,8 @@ export function TermForm() {
             onClick={() => setMode(tab)}
             className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${
               mode === tab
-                ? 'border-zinc-900 dark:border-zinc-50 text-zinc-900 dark:text-zinc-50'
-                : 'border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300'
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
             {tab}
@@ -98,38 +98,33 @@ export function TermForm() {
           >
             {(field) => (
               <div className="flex flex-col gap-1">
-                <label htmlFor={field.name} className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                <label htmlFor={field.name} className="text-sm font-medium text-foreground">
                   Term
                 </label>
-                <input
+                <Input
                   id={field.name}
                   name={field.name}
                   value={field.state.value}
                   onChange={(e) => field.handleChange(e.target.value)}
                   onBlur={field.handleBlur}
                   placeholder="e.g. dependency injection"
-                  className={inputClass}
                 />
                 {field.state.meta.errors.length > 0 && (
-                  <p className="text-xs text-red-600 dark:text-red-400">{field.state.meta.errors[0]}</p>
+                  <p className="text-xs text-destructive">{field.state.meta.errors[0]}</p>
                 )}
               </div>
             )}
           </singleForm.Field>
 
           {singleMutation.error && (
-            <p className="text-sm text-red-600 dark:text-red-400">
+            <p className="text-sm text-destructive">
               {singleMutation.error instanceof Error ? singleMutation.error.message : 'Something went wrong'}
             </p>
           )}
 
-          <button
-            type="submit"
-            disabled={singleMutation.isPending}
-            className="w-full sm:w-auto rounded-lg bg-zinc-900 dark:bg-zinc-50 px-4 py-2 text-sm font-medium text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
+          <Button type="submit" disabled={singleMutation.isPending} className="w-full sm:w-auto">
             {singleMutation.isPending ? 'Explaining…' : 'Explain'}
-          </button>
+          </Button>
         </form>
       ) : (
         <form
@@ -154,10 +149,10 @@ export function TermForm() {
           >
             {(field) => (
               <div className="flex flex-col gap-1">
-                <label htmlFor={field.name} className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                <label htmlFor={field.name} className="text-sm font-medium text-foreground">
                   Terms (one per line)
                 </label>
-                <textarea
+                <Textarea
                   id={field.name}
                   name={field.name}
                   value={field.state.value}
@@ -165,32 +160,28 @@ export function TermForm() {
                   onBlur={field.handleBlur}
                   placeholder={'dependency injection\nmemoization\nclosure'}
                   rows={6}
-                  className={`${inputClass} resize-y`}
+                  className="resize-y"
                 />
                 {field.state.meta.errors.length > 0 && (
-                  <p className="text-xs text-red-600 dark:text-red-400">{field.state.meta.errors[0]}</p>
+                  <p className="text-xs text-destructive">{field.state.meta.errors[0]}</p>
                 )}
               </div>
             )}
           </multipleForm.Field>
 
           {multipleMutation.error && (
-            <p className="text-sm text-red-600 dark:text-red-400">
+            <p className="text-sm text-destructive">
               {multipleMutation.error instanceof Error ? multipleMutation.error.message : 'Something went wrong'}
             </p>
           )}
 
           {batchCount !== null && !multipleMutation.isPending && (
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">{batchCount} term{batchCount !== 1 ? 's' : ''} explained.</p>
+            <p className="text-sm text-muted-foreground">{batchCount} term{batchCount !== 1 ? 's' : ''} explained.</p>
           )}
 
-          <button
-            type="submit"
-            disabled={multipleMutation.isPending}
-            className="w-full sm:w-auto rounded-lg bg-zinc-900 dark:bg-zinc-50 px-4 py-2 text-sm font-medium text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
+          <Button type="submit" disabled={multipleMutation.isPending} className="w-full sm:w-auto">
             {multipleMutation.isPending ? 'Explaining…' : 'Explain All'}
-          </button>
+          </Button>
         </form>
       )}
     </div>
