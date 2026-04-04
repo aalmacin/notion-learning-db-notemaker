@@ -2,16 +2,19 @@
 
 import { deleteTerm as dbDeleteTerm, updateTerm } from '@/lib/db';
 import { explainTermWithAI } from '@/lib/openai';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import type { Term, Priority } from '@/lib/db';
 
 export async function deleteTerm(id: number): Promise<void> {
-  await dbDeleteTerm(id);
+  const supabase = await createSupabaseServerClient();
+  await dbDeleteTerm(supabase, id);
   revalidatePath('/terms');
 }
 
 export async function updateTermPriority(id: number, priority: Priority): Promise<Term> {
-  const updated = await updateTerm(id, { priority });
+  const supabase = await createSupabaseServerClient();
+  const updated = await updateTerm(supabase, id, { priority });
   if (!updated) throw new Error('Term not found');
   revalidatePath('/terms');
   return updated;
@@ -19,8 +22,8 @@ export async function updateTermPriority(id: number, priority: Priority): Promis
 
 export async function regenerateTerm(id: number, name: string): Promise<Term> {
   const explanation = await explainTermWithAI(name);
-
-  const updated = await updateTerm(id, {
+  const supabase = await createSupabaseServerClient();
+  const updated = await updateTerm(supabase, id, {
     content: explanation.content,
     categories: explanation.categories,
   });

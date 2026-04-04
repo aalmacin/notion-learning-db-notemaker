@@ -11,6 +11,7 @@ import {
   updateTerm,
   type ConceptRefinement,
 } from '@/lib/db';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { evaluatePreRefinement, evaluateRefinement } from '@/lib/openai';
 import { createNotionPage, appendRefinementToNotionPage } from '@/lib/notion';
 
@@ -18,12 +19,13 @@ export async function submitPreRefinement(
   termId: number,
   userExplanation: string,
 ): Promise<ConceptRefinement> {
-  const term = await getTermById(termId);
+  const supabase = await createSupabaseServerClient();
+  const term = await getTermById(supabase, termId);
   if (!term) throw new Error('Term not found');
 
-  const refinement = await createRefinement(termId, userExplanation);
+  const refinement = await createRefinement(supabase, termId, userExplanation);
   const result = await evaluatePreRefinement(term.name, userExplanation);
-  const updated = await updatePreRefinementResult(refinement.id, result.accuracy, result.review);
+  const updated = await updatePreRefinementResult(supabase, refinement.id, result.accuracy, result.review);
 
   revalidatePath(`/terms/${termId}`);
   return updated;
@@ -34,11 +36,12 @@ export async function submitRefinement(
   termId: number,
   userExplanation: string,
 ): Promise<ConceptRefinement> {
-  const term = await getTermById(termId);
+  const supabase = await createSupabaseServerClient();
+  const term = await getTermById(supabase, termId);
   if (!term) throw new Error('Term not found');
 
   const result = await evaluateRefinement(term.name, userExplanation);
-  const updated = await updateRefinementData(refinementId, {
+  const updated = await updateRefinementData(supabase, refinementId, {
     refinement: userExplanation,
     refinement_accuracy: result.accuracy,
     refinement_review: result.review,
@@ -52,10 +55,11 @@ export async function submitRefinement(
 }
 
 export async function addRefinementToNotion(termId: number, refinementId: number): Promise<void> {
-  const term = await getTermById(termId);
+  const supabase = await createSupabaseServerClient();
+  const term = await getTermById(supabase, termId);
   if (!term) throw new Error('Term not found');
 
-  const refinement = await getRefinementById(refinementId);
+  const refinement = await getRefinementById(supabase, refinementId);
   if (
     !refinement?.refinement ||
     !refinement.refinement_formatted_note ||
@@ -72,7 +76,7 @@ export async function addRefinementToNotion(termId: number, refinementId: number
       categories: term.categories,
       priority: term.priority,
     });
-    await updateTerm(termId, { notion_page_id: pageId });
+    await updateTerm(supabase, termId, { notion_page_id: pageId });
   }
 
   await appendRefinementToNotionPage(
@@ -90,7 +94,8 @@ export async function addRefinementToNotion(termId: number, refinementId: number
 }
 
 export async function removeRefinement(id: number, termId: number): Promise<void> {
-  await deleteConceptRefinement(id);
+  const supabase = await createSupabaseServerClient();
+  await deleteConceptRefinement(supabase, id);
   revalidatePath(`/terms/${termId}`);
   revalidatePath('/terms');
 }

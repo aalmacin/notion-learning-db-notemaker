@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { getTermById, getRefinementsByTermId } from '@/lib/db';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { TermDetailPage } from '@/components/TermDetailPage';
 
 export default async function TermPage({ params }: { params: Promise<{ id: string }> }) {
@@ -7,7 +8,8 @@ export default async function TermPage({ params }: { params: Promise<{ id: strin
   const id = Number(idStr);
   if (isNaN(id)) notFound();
 
-  const [term, refinements] = await Promise.all([getTermById(id), getRefinementsByTermId(id)]);
+  const supabase = await createSupabaseServerClient();
+  const [term, refinements] = await Promise.all([getTermById(supabase, id), getRefinementsByTermId(supabase, id)]);
   if (!term) notFound();
 
   return <TermDetailPage term={term} initialRefinements={refinements} />;

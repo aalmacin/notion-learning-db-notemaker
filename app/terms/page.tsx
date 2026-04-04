@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { getAllTerms, getAllCategories } from '@/lib/db';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { TermsTable } from '@/components/TermsTable';
 
 export default async function TermsPage({
@@ -8,7 +9,8 @@ export default async function TermsPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const { category } = await searchParams;
-  const [terms, categories] = await Promise.all([getAllTerms(), getAllCategories()]);
+  const supabase = await createSupabaseServerClient();
+  const [terms, categories] = await Promise.all([getAllTerms(supabase), getAllCategories(supabase)]);
   const initialCategory = typeof category === 'string' ? category : undefined;
 
   return (
