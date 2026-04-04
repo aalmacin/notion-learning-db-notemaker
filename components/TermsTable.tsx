@@ -1,7 +1,10 @@
 'use client';
 
-import { Fragment, useEffect, useRef, useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Badge } from '@/components/ui/badge';
 import {
   useReactTable,
   getCoreRowModel,
@@ -398,33 +401,46 @@ export function TermsTable({ initialData, initialCategories, initialCategory }: 
           ))}
         </div>
         {filterCategoryNames.length > 0 && (
-          <div className="flex flex-wrap gap-2 items-center">
-            <span className="text-xs text-zinc-500 dark:text-zinc-400">Filter by category:</span>
-            {filterCategoryNames.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => toggleCategory(cat)}
-                className={`px-2 py-1 text-xs rounded-full border transition-colors ${
-                  selectedCategories.includes(cat)
-                    ? 'bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-50 dark:text-zinc-900 dark:border-zinc-50'
-                    : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400 dark:bg-zinc-900 dark:text-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-500'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-            {selectedCategories.length > 0 && (
-              <button
-                onClick={() => {
-                  setSelectedCategories([]);
-                  setPagination((p) => ({ ...p, pageIndex: 0 }));
-                }}
-                className="text-xs text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
-              >
-                Clear
-              </button>
-            )}
-          </div>
+          <Popover>
+            <PopoverTrigger className="flex items-center gap-2 px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
+              <span>Categories</span>
+              {selectedCategories.length > 0 && (
+                <Badge variant="secondary" className="text-xs px-1.5 py-0">
+                  {selectedCategories.length}
+                </Badge>
+              )}
+              <span className="text-zinc-400 text-xs">▾</span>
+            </PopoverTrigger>
+            <PopoverContent className="w-52 p-0" align="start">
+              <Command>
+                <CommandInput placeholder="Search categories…" />
+                <CommandList>
+                  <CommandEmpty>No categories found.</CommandEmpty>
+                  <CommandGroup>
+                    {filterCategoryNames.map((cat) => (
+                      <CommandItem
+                        key={cat}
+                        onSelect={() => toggleCategory(cat)}
+                        data-checked={selectedCategories.includes(cat)}
+                      >
+                        {cat}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+                {selectedCategories.length > 0 && (
+                  <div className="border-t border-zinc-100 dark:border-zinc-800 p-1">
+                    <button
+                      onClick={() => { setSelectedCategories([]); setPagination((p) => ({ ...p, pageIndex: 0 })); }}
+                      className="w-full text-xs text-center py-1.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+                    >
+                      Clear filters
+                    </button>
+                  </div>
+                )}
+              </Command>
+            </PopoverContent>
+          </Popover>
         )}
       </div>
 
