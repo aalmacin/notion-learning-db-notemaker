@@ -59,15 +59,18 @@ Evaluate their explanation and respond with a JSON object with these exact field
 
 Respond ONLY with valid JSON, no markdown or extra text.`;
 
-const REFINEMENT_PROMPT = `You are a technical learning evaluator using the Feynman technique.
+function buildRefinementPrompt(): string {
+  const today = new Date().toISOString().split('T')[0];
+  return `You are a technical learning evaluator using the Feynman technique.
 The user has researched a concept and is now explaining it with that knowledge.
 Evaluate their explanation and respond with a JSON object with these exact fields:
 - "accuracy": integer 0-100 representing accuracy of the explanation
 - "review": string summarizing accuracy, what was correct, and any improvements
 - "formattedNote": a compact physical notebook note — 1 short paragraph (2 max if absolutely required), precise definitions, no fluff, no long examples, optimized for fast rereading and recall
-- "additionalNote": detailed digital reference notes in markdown format. Use **bold text** for section subheadings and prefix each bullet with "- ". Include a "Date:" line with today's date if relevant context exists.
+- "additionalNote": detailed digital reference notes in markdown format. Use **bold text** for section subheadings and prefix each bullet with "- ". Include a "**Date**: ${today}" line.
 
 Respond ONLY with valid JSON, no markdown or extra text.`;
+}
 
 export async function evaluatePreRefinement(
   termName: string,
@@ -103,7 +106,7 @@ export async function evaluateRefinement(
   const response = await client.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
-      { role: 'system', content: REFINEMENT_PROMPT },
+      { role: 'system', content: buildRefinementPrompt() },
       { role: 'user', content: `Concept: ${termName}\n\nUser explanation: ${userExplanation}` },
     ],
     response_format: { type: 'json_object' },
