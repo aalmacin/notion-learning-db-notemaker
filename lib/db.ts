@@ -1,5 +1,4 @@
-import Database from 'better-sqlite3';
-import path from 'path';
+import { createClient } from '@supabase/supabase-js';
 
 export type Priority = 'High' | 'Medium' | 'Low';
 
@@ -19,214 +18,6 @@ export type Category = {
   name: string;
 };
 
-type TermRow = Omit<Term, 'categories'>;
-
-const DB_PATH = path.join(process.cwd(), 'notemaker.db');
-
-let _db: Database.Database | null = null;
-
-function getDb(): Database.Database {
-  if (_db) return _db;
-
-  _db = new Database(DB_PATH);
-  _db.pragma('journal_mode = WAL');
-  _db.pragma('foreign_keys = ON');
-
-  _db.exec(`
-    CREATE TABLE IF NOT EXISTS terms (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL UNIQUE,
-      content TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      notion_page_id TEXT,
-      priority TEXT NOT NULL DEFAULT 'Medium'
-    );
-
-    CREATE TABLE IF NOT EXISTS categories (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL UNIQUE
-    );
-
-    CREATE TABLE IF NOT EXISTS term_categories (
-      term_id INTEGER NOT NULL REFERENCES terms(id) ON DELETE CASCADE,
-      category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
-      PRIMARY KEY (term_id, category_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS concept_refinements (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      term_id INTEGER NOT NULL REFERENCES terms(id) ON DELETE CASCADE,
-      pre_refinement TEXT NOT NULL,
-      pre_refinement_accuracy INTEGER,
-      pre_refinement_review TEXT,
-      refinement TEXT,
-      refinement_accuracy INTEGER,
-      refinement_review TEXT,
-      refinement_formatted_note TEXT,
-      refinement_additional_note TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-  `);
-
-  // Migrate: drop old categories column if it exists
-  try {
-    _db.exec('ALTER TABLE terms DROP COLUMN categories');
-  } catch {
-    // Already dropped or never existed
-  }
-
-  // Migrate: add priority column if it doesn't exist
-  try {
-    _db.exec("ALTER TABLE terms ADD COLUMN priority TEXT NOT NULL DEFAULT 'Medium'");
-  } catch {
-    // Already exists
-  }
-
-  return _db;
-}
-
-function getCategoriesForTerm(db: Database.Database, termId: number): string[] {
-  const rows = db
-    .prepare(
-      `SELECT c.name FROM categories c
-       JOIN term_categories tc ON tc.category_id = c.id
-       WHERE tc.term_id = ?
-       ORDER BY c.name`,
-    )
-    .all(termId) as { name: string }[];
-  return rows.map((r) => r.name);
-}
-
-function upsertCategories(db: Database.Database, names: string[]): number[] {
-  const insert = db.prepare('INSERT OR IGNORE INTO categories (name) VALUES (?)');
-  const select = db.prepare('SELECT id FROM categories WHERE name = ?');
-  return names.map((name) => {
-    insert.run(name);
-    return (select.get(name) as { id: number }).id;
-  });
-}
-
-function setTermCategories(db: Database.Database, termId: number, categoryIds: number[]): void {
-  db.prepare('DELETE FROM term_categories WHERE term_id = ?').run(termId);
-  const insert = db.prepare('INSERT INTO term_categories (term_id, category_id) VALUES (?, ?)');
-  for (const categoryId of categoryIds) {
-    insert.run(termId, categoryId);
-  }
-}
-
-export function getAllCategories(): Category[] {
-  return getDb().prepare('SELECT * FROM categories ORDER BY name').all() as Category[];
-}
-
-export function getTerm(name: string): Term | null {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM terms WHERE LOWER(name) = LOWER(?)').get(name) as TermRow | undefined;
-  if (!row) return null;
-  const explained = !!(db
-    .prepare('SELECT 1 FROM concept_refinements WHERE term_id = ? AND refinement_formatted_note IS NOT NULL LIMIT 1')
-    .get(row.id));
-  return { ...row, categories: getCategoriesForTerm(db, row.id), explained };
-}
-
-export function getAllTerms(): Term[] {
-  const db = getDb();
-  const rows = db.prepare('SELECT * FROM terms ORDER BY created_at DESC').all() as TermRow[];
-
-  const allCats = db
-    .prepare(
-      `SELECT tc.term_id, c.name FROM term_categories tc
-       JOIN categories c ON c.id = tc.category_id
-       ORDER BY c.name`,
-    )
-    .all() as { term_id: number; name: string }[];
-
-  const catMap = new Map<number, string[]>();
-  for (const { term_id, name } of allCats) {
-    if (!catMap.has(term_id)) catMap.set(term_id, []);
-    catMap.get(term_id)!.push(name);
-  }
-
-  const explainedIds = new Set(
-    (db
-      .prepare('SELECT DISTINCT term_id FROM concept_refinements WHERE refinement_formatted_note IS NOT NULL')
-      .all() as { term_id: number }[]).map((r) => r.term_id)
-  );
-
-  return rows.map((row) => ({
-    ...row,
-    categories: catMap.get(row.id) ?? [],
-    explained: explainedIds.has(row.id),
-  }));
-}
-
-export function insertTerm(term: Omit<Term, 'id' | 'created_at' | 'explained'>): Term {
-  const db = getDb();
-  return db.transaction(() => {
-    const row = db
-      .prepare('INSERT INTO terms (name, content, notion_page_id, priority) VALUES (?, ?, ?, ?) RETURNING *')
-      .get(term.name, term.content, term.notion_page_id ?? null, term.priority ?? 'Medium') as TermRow;
-    const categoryIds = upsertCategories(db, term.categories);
-    setTermCategories(db, row.id, categoryIds);
-    return { ...row, categories: term.categories, explained: false };
-  })();
-}
-
-export function updateTerm(
-  id: number,
-  updates: Partial<Omit<Term, 'id' | 'created_at' | 'explained'>>,
-): Term | null {
-  const db = getDb();
-  return db.transaction(() => {
-    const fields: string[] = [];
-    const values: unknown[] = [];
-
-    if (updates.name !== undefined) { fields.push('name = ?'); values.push(updates.name); }
-    if (updates.content !== undefined) { fields.push('content = ?'); values.push(updates.content); }
-    if (updates.notion_page_id !== undefined) { fields.push('notion_page_id = ?'); values.push(updates.notion_page_id); }
-    if (updates.priority !== undefined) { fields.push('priority = ?'); values.push(updates.priority); }
-
-    let row: TermRow | undefined;
-    if (fields.length > 0) {
-      values.push(id);
-      row = db
-        .prepare(`UPDATE terms SET ${fields.join(', ')} WHERE id = ? RETURNING *`)
-        .get(...values) as TermRow | undefined;
-    } else {
-      row = db.prepare('SELECT * FROM terms WHERE id = ?').get(id) as TermRow | undefined;
-    }
-
-    if (!row) return null;
-
-    if (updates.categories !== undefined) {
-      const categoryIds = upsertCategories(db, updates.categories);
-      setTermCategories(db, row.id, categoryIds);
-    }
-
-    const explained = !!(db
-      .prepare('SELECT 1 FROM concept_refinements WHERE term_id = ? AND refinement_formatted_note IS NOT NULL LIMIT 1')
-      .get(row.id));
-    return { ...row, categories: getCategoriesForTerm(db, row.id), explained };
-  })();
-}
-
-export function deleteTerm(id: number): void {
-  getDb().prepare('DELETE FROM terms WHERE id = ?').run(id);
-}
-
-export function insertCategory(name: string): Category {
-  const db = getDb();
-  db.prepare('INSERT OR IGNORE INTO categories (name) VALUES (?)').run(name);
-  return db.prepare('SELECT * FROM categories WHERE name = ?').get(name) as Category;
-}
-
-export function deleteCategory(id: number): void {
-  getDb().prepare('DELETE FROM categories WHERE id = ?').run(id);
-}
-
-export function updateTermCategories(termId: number, categories: string[]): Term | null {
-  return updateTerm(termId, { categories });
-}
-
 export type ConceptRefinement = {
   id: number;
   term_id: number;
@@ -241,49 +32,289 @@ export type ConceptRefinement = {
   created_at: string;
 };
 
-export function getTermById(id: number): Term | null {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM terms WHERE id = ?').get(id) as TermRow | undefined;
-  if (!row) return null;
-  const explained = !!(db
-    .prepare('SELECT 1 FROM concept_refinements WHERE term_id = ? AND refinement_formatted_note IS NOT NULL LIMIT 1')
-    .get(row.id));
-  return { ...row, categories: getCategoriesForTerm(db, row.id), explained };
+type TermRow = Omit<Term, 'categories' | 'explained'>;
+
+function getClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing Supabase env vars');
+  return createClient(url, key);
 }
 
-export function getRefinementsByTermId(termId: number): ConceptRefinement[] {
-  return getDb()
-    .prepare('SELECT * FROM concept_refinements WHERE term_id = ? ORDER BY created_at DESC')
-    .all(termId) as ConceptRefinement[];
+async function getCategoriesForTerm(termId: number): Promise<string[]> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from('term_categories')
+    .select('categories(name)')
+    .eq('term_id', termId)
+    .order('categories(name)');
+  if (error) throw error;
+  return (data as unknown as { categories: { name: string } | null }[])
+    .map((r) => r.categories?.name)
+    .filter((n): n is string => n != null);
 }
 
-export function getRefinementById(id: number): ConceptRefinement | null {
-  return (
-    (getDb()
-      .prepare('SELECT * FROM concept_refinements WHERE id = ?')
-      .get(id) as ConceptRefinement | undefined) ?? null
-  );
+async function upsertCategories(names: string[]): Promise<number[]> {
+  if (names.length === 0) return [];
+  const supabase = getClient();
+  const { error } = await supabase
+    .from('categories')
+    .upsert(names.map((name) => ({ name })), { onConflict: 'name', ignoreDuplicates: true });
+  if (error) throw error;
+  const { data, error: selectError } = await supabase
+    .from('categories')
+    .select('id, name')
+    .in('name', names);
+  if (selectError) throw selectError;
+  return (data as Category[]).map((c) => c.id);
 }
 
-export function createRefinement(termId: number, preRefinement: string): ConceptRefinement {
-  return getDb()
-    .prepare('INSERT INTO concept_refinements (term_id, pre_refinement) VALUES (?, ?) RETURNING *')
-    .get(termId, preRefinement) as ConceptRefinement;
+async function setTermCategories(termId: number, categoryIds: number[]): Promise<void> {
+  const supabase = getClient();
+  const { error: deleteError } = await supabase
+    .from('term_categories')
+    .delete()
+    .eq('term_id', termId);
+  if (deleteError) throw deleteError;
+  if (categoryIds.length === 0) return;
+  const { error } = await supabase
+    .from('term_categories')
+    .insert(categoryIds.map((category_id) => ({ term_id: termId, category_id })));
+  if (error) throw error;
 }
 
-export function updatePreRefinementResult(
+async function isTermExplained(termId: number): Promise<boolean> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from('concept_refinements')
+    .select('id')
+    .eq('term_id', termId)
+    .not('refinement_formatted_note', 'is', null)
+    .limit(1);
+  if (error) throw error;
+  return (data?.length ?? 0) > 0;
+}
+
+export async function getAllCategories(): Promise<Category[]> {
+  const supabase = getClient();
+  const { data, error } = await supabase.from('categories').select('*').order('name');
+  if (error) throw error;
+  return data as Category[];
+}
+
+export async function getTerm(name: string): Promise<Term | null> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from('terms')
+    .select('*')
+    .ilike('name', name)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const row = data as TermRow;
+  const [categories, explained] = await Promise.all([
+    getCategoriesForTerm(row.id),
+    isTermExplained(row.id),
+  ]);
+  return { ...row, categories, explained };
+}
+
+export async function getAllTerms(): Promise<Term[]> {
+  const supabase = getClient();
+  const { data: rows, error } = await supabase
+    .from('terms')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+
+  const { data: catLinks, error: catError } = await supabase
+    .from('term_categories')
+    .select('term_id, categories(name)');
+  if (catError) throw catError;
+
+  const catMap = new Map<number, string[]>();
+  for (const link of catLinks as unknown as { term_id: number; categories: { name: string } | null }[]) {
+    if (!link.categories) continue;
+    if (!catMap.has(link.term_id)) catMap.set(link.term_id, []);
+    catMap.get(link.term_id)!.push(link.categories.name);
+  }
+
+  const { data: explained, error: explainedError } = await supabase
+    .from('concept_refinements')
+    .select('term_id')
+    .not('refinement_formatted_note', 'is', null);
+  if (explainedError) throw explainedError;
+  const explainedIds = new Set((explained as { term_id: number }[]).map((r) => r.term_id));
+
+  return (rows as TermRow[]).map((row) => ({
+    ...row,
+    categories: catMap.get(row.id) ?? [],
+    explained: explainedIds.has(row.id),
+  }));
+}
+
+export async function insertTerm(term: Omit<Term, 'id' | 'created_at' | 'explained'>): Promise<Term> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from('terms')
+    .insert({
+      name: term.name,
+      content: term.content,
+      notion_page_id: term.notion_page_id ?? null,
+      priority: term.priority ?? 'Medium',
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  const row = data as TermRow;
+  const categoryIds = await upsertCategories(term.categories);
+  await setTermCategories(row.id, categoryIds);
+  return { ...row, categories: term.categories, explained: false };
+}
+
+export async function updateTerm(
+  id: number,
+  updates: Partial<Omit<Term, 'id' | 'created_at' | 'explained'>>,
+): Promise<Term | null> {
+  const supabase = getClient();
+  const fields: Partial<TermRow> = {};
+  if (updates.name !== undefined) fields.name = updates.name;
+  if (updates.content !== undefined) fields.content = updates.content;
+  if (updates.notion_page_id !== undefined) fields.notion_page_id = updates.notion_page_id;
+  if (updates.priority !== undefined) fields.priority = updates.priority;
+
+  let row: TermRow;
+  if (Object.keys(fields).length > 0) {
+    const { data, error } = await supabase
+      .from('terms')
+      .update(fields)
+      .eq('id', id)
+      .select()
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    row = data as TermRow;
+  } else {
+    const { data, error } = await supabase
+      .from('terms')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    row = data as TermRow;
+  }
+
+  if (updates.categories !== undefined) {
+    const categoryIds = await upsertCategories(updates.categories);
+    await setTermCategories(row.id, categoryIds);
+  }
+
+  const [categories, explained] = await Promise.all([
+    getCategoriesForTerm(row.id),
+    isTermExplained(row.id),
+  ]);
+  return { ...row, categories, explained };
+}
+
+export async function deleteTerm(id: number): Promise<void> {
+  const supabase = getClient();
+  const { error } = await supabase.from('terms').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function insertCategory(name: string): Promise<Category> {
+  const supabase = getClient();
+  const { error } = await supabase
+    .from('categories')
+    .upsert({ name }, { onConflict: 'name', ignoreDuplicates: true });
+  if (error) throw error;
+  const { data, error: selectError } = await supabase
+    .from('categories')
+    .select('*')
+    .eq('name', name)
+    .single();
+  if (selectError) throw selectError;
+  return data as Category;
+}
+
+export async function deleteCategory(id: number): Promise<void> {
+  const supabase = getClient();
+  const { error } = await supabase.from('categories').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function updateTermCategories(termId: number, categories: string[]): Promise<Term | null> {
+  return updateTerm(termId, { categories });
+}
+
+export async function getTermById(id: number): Promise<Term | null> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from('terms')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const row = data as TermRow;
+  const [categories, explained] = await Promise.all([
+    getCategoriesForTerm(row.id),
+    isTermExplained(row.id),
+  ]);
+  return { ...row, categories, explained };
+}
+
+export async function getRefinementsByTermId(termId: number): Promise<ConceptRefinement[]> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from('concept_refinements')
+    .select('*')
+    .eq('term_id', termId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data as ConceptRefinement[];
+}
+
+export async function getRefinementById(id: number): Promise<ConceptRefinement | null> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from('concept_refinements')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as ConceptRefinement | null) ?? null;
+}
+
+export async function createRefinement(termId: number, preRefinement: string): Promise<ConceptRefinement> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from('concept_refinements')
+    .insert({ term_id: termId, pre_refinement: preRefinement })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as ConceptRefinement;
+}
+
+export async function updatePreRefinementResult(
   id: number,
   accuracy: number,
   review: string,
-): ConceptRefinement {
-  return getDb()
-    .prepare(
-      'UPDATE concept_refinements SET pre_refinement_accuracy = ?, pre_refinement_review = ? WHERE id = ? RETURNING *',
-    )
-    .get(accuracy, review, id) as ConceptRefinement;
+): Promise<ConceptRefinement> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from('concept_refinements')
+    .update({ pre_refinement_accuracy: accuracy, pre_refinement_review: review })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as ConceptRefinement;
 }
 
-export function updateRefinementData(
+export async function updateRefinementData(
   id: number,
   data: {
     refinement: string;
@@ -292,24 +323,20 @@ export function updateRefinementData(
     refinement_formatted_note: string;
     refinement_additional_note: string;
   },
-): ConceptRefinement {
-  return getDb()
-    .prepare(
-      `UPDATE concept_refinements
-       SET refinement = ?, refinement_accuracy = ?, refinement_review = ?,
-           refinement_formatted_note = ?, refinement_additional_note = ?
-       WHERE id = ? RETURNING *`,
-    )
-    .get(
-      data.refinement,
-      data.refinement_accuracy,
-      data.refinement_review,
-      data.refinement_formatted_note,
-      data.refinement_additional_note,
-      id,
-    ) as ConceptRefinement;
+): Promise<ConceptRefinement> {
+  const supabase = getClient();
+  const { data: updated, error } = await supabase
+    .from('concept_refinements')
+    .update(data)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return updated as ConceptRefinement;
 }
 
-export function deleteConceptRefinement(id: number): void {
-  getDb().prepare('DELETE FROM concept_refinements WHERE id = ?').run(id);
+export async function deleteConceptRefinement(id: number): Promise<void> {
+  const supabase = getClient();
+  const { error } = await supabase.from('concept_refinements').delete().eq('id', id);
+  if (error) throw error;
 }

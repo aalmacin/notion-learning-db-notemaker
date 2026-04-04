@@ -136,9 +136,10 @@ Since all callers are already `async` server actions, adding `await` is straight
 
 - [ ] All tables created in Supabase
 - [ ] Data imported and sequences reset
-- [ ] `lib/db.ts` rewritten with Supabase client
-- [ ] All server actions updated with `await`
+- [x] `lib/db.ts` rewritten with Supabase client
+- [x] All server actions updated with `await`
+- [x] `better-sqlite3` removed from `package.json`
+- [ ] `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` filled in `.env.local`
 - [ ] Local dev works against Supabase
 - [ ] Vercel env vars set
 - [ ] Deployed app reads and writes correctly
-- [ ] `better-sqlite3` removed from `package.json`

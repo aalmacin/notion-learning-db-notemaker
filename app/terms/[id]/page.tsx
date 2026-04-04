@@ -7,10 +7,8 @@ export default async function TermPage({ params }: { params: Promise<{ id: strin
   const id = Number(idStr);
   if (isNaN(id)) notFound();
 
-  const term = getTermById(id);
+  const [term, refinements] = await Promise.all([getTermById(id), getRefinementsByTermId(id)]);
   if (!term) notFound();
-
-  const refinements = getRefinementsByTermId(id);
 
   return <TermDetailPage term={term} initialRefinements={refinements} />;
 }

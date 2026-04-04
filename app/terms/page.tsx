@@ -8,8 +8,7 @@ export default async function TermsPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const { category } = await searchParams;
-  const terms = getAllTerms();
-  const categories = getAllCategories();
+  const [terms, categories] = await Promise.all([getAllTerms(), getAllCategories()]);
   const initialCategory = typeof category === 'string' ? category : undefined;
 
   return (
