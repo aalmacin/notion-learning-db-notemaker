@@ -31,9 +31,9 @@ function TermCard({ term }: { term: TermResultType }) {
   const anyError = regenerateMutation.error ?? deleteMutation.error ?? notionMutation.error
 
   return (
-    <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 flex flex-col gap-4">
+    <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 sm:p-6 flex flex-col gap-4">
       <div>
-        <h2 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{term.name}</h2>
+        <h2 className="text-xl sm:text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{term.name}</h2>
         {term.categories.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-2">
             {term.categories.map((cat: string) => (

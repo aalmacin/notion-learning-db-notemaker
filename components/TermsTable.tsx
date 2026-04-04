@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useRef, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   useReactTable,
@@ -428,7 +428,122 @@ export function TermsTable({ initialData, initialCategories, initialCategory }: 
         )}
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+      {/* Mobile card view */}
+      <div className="block sm:hidden rounded-lg border border-zinc-200 dark:border-zinc-800 divide-y divide-zinc-100 dark:divide-zinc-800 bg-white dark:bg-black">
+        {table.getRowModel().rows.length === 0 ? (
+          <p className="px-4 py-8 text-center text-zinc-400 dark:text-zinc-600">No terms found.</p>
+        ) : (
+          table.getRowModel().rows.map((row) => {
+            const term = row.original;
+            const isDeleting = deleteMutation.isPending && deleteMutation.variables === term.id;
+            const isAddingToNotion = addToNotionMutation.isPending && addToNotionMutation.variables?.id === term.id;
+            const isNotionSuccess = notionSuccessId === term.id;
+            const isConfirmingDelete = confirmingDeleteId === term.id;
+            const priorityColor =
+              term.priority === 'High'
+                ? 'text-red-600 dark:text-red-400'
+                : term.priority === 'Low'
+                  ? 'text-zinc-400 dark:text-zinc-500'
+                  : 'text-yellow-600 dark:text-yellow-400';
+
+            return (
+              <div key={row.id}>
+                <div
+                  className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
+                  onClick={row.getToggleExpandedHandler()}
+                >
+                  <button
+                    className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors w-4 text-center flex-shrink-0"
+                    aria-label={row.getIsExpanded() ? 'Collapse' : 'Expand'}
+                  >
+                    {row.getIsExpanded() ? '▾' : '▸'}
+                  </button>
+                  <span className="font-medium text-zinc-900 dark:text-zinc-50 flex-1 min-w-0 truncate">{term.name}</span>
+                  <span className={`text-xs font-medium flex-shrink-0 ${priorityColor}`}>{term.priority}</span>
+                </div>
+
+                {term.categories.length > 0 && (
+                  <div className="px-4 pb-2 flex flex-wrap gap-1.5">
+                    {term.categories.map((cat) => (
+                      <span key={cat} className="px-2 py-0.5 text-xs rounded-full bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                        {cat}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <div className="px-4 pb-3 flex flex-wrap gap-2 items-center" onClick={(e) => e.stopPropagation()}>
+                  <Link
+                    href={`/terms/${term.id}`}
+                    className="px-2 py-1 text-xs rounded bg-zinc-100 text-zinc-700 hover:bg-zinc-200 transition-colors dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                  >
+                    Open
+                  </Link>
+                  {isConfirmingDelete ? (
+                    <>
+                      <button
+                        onClick={() => { deleteMutation.mutate(term.id); setConfirmingDeleteId(null); }}
+                        disabled={isDeleting}
+                        className="px-2 py-1 text-xs rounded bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50 transition-colors dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        onClick={() => setConfirmingDeleteId(null)}
+                        className="px-2 py-1 text-xs rounded bg-zinc-100 text-zinc-700 hover:bg-zinc-200 transition-colors dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmingDeleteId(term.id)}
+                      disabled={isDeleting}
+                      className="px-2 py-1 text-xs rounded bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50 transition-colors dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
+                    >
+                      Delete
+                    </button>
+                  )}
+                  <button
+                    onClick={() => addToNotionMutation.mutate(term)}
+                    disabled={term.notion_page_id !== null || isAddingToNotion}
+                    className="px-2 py-1 text-xs rounded bg-zinc-100 text-zinc-700 hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                  >
+                    {isAddingToNotion ? 'Adding…' : 'Add to Notion'}
+                  </button>
+                  {isNotionSuccess && <p className="text-xs text-green-600 dark:text-green-400">Added to Notion.</p>}
+                </div>
+
+                {row.getIsExpanded() && (
+                  <div className="px-4 py-4 bg-zinc-50 dark:bg-zinc-950 border-t border-zinc-100 dark:border-zinc-800">
+                    <p className="text-sm leading-6 text-zinc-700 dark:text-zinc-300">{term.content}</p>
+                    <CategoryEditor
+                      term={term}
+                      allCategories={allCategories}
+                      onSaved={(updated) =>
+                        queryClient.setQueryData<Term[]>(queryKeys.terms.all(), (prev = []) =>
+                          prev.map((t) => (t.id === updated.id ? updated : t))
+                        )
+                      }
+                    />
+                    <PriorityEditor
+                      term={term}
+                      onSaved={(updated) =>
+                        queryClient.setQueryData<Term[]>(queryKeys.terms.all(), (prev = []) =>
+                          prev.map((t) => (t.id === updated.id ? updated : t))
+                        )
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Desktop table view */}
+      <div className="hidden sm:block overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
         <table className="w-full text-sm">
           <thead className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
             {table.getHeaderGroups().map((headerGroup) => (

@@ -111,21 +111,21 @@ export function TermDetailPage({ term, initialRefinements }: Props) {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black p-8">
-      <div className="max-w-3xl mx-auto space-y-8">
+    <div className="min-h-screen bg-zinc-50 dark:bg-black px-4 py-6 sm:p-8">
+      <div className="max-w-3xl mx-auto space-y-6 sm:space-y-8">
         {/* Header */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
           <Link
             href="/terms"
             className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
           >
             ← Terms
           </Link>
-          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{term.name}</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{term.name}</h1>
         </div>
 
         {/* Term card */}
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-6 space-y-4">
+        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 sm:p-6 space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             {term.categories.map((cat) => (
               <span
