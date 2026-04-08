@@ -9,6 +9,7 @@ import {
   getRefinementById,
   getTermById,
   updateTerm,
+  getUserSettings,
   type ConceptRefinement,
 } from '@/lib/db';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -56,6 +57,17 @@ export async function submitRefinement(
 
 export async function addRefinementToNotion(termId: number, refinementId: number): Promise<void> {
   const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const settings = await getUserSettings(supabase, user.id);
+  if (!settings?.notion_api_key || !settings?.notion_database_id) {
+    throw new Error('Notion credentials not configured. Go to Settings to add your Notion API key and database ID.');
+  }
+  const credentials = { apiKey: settings.notion_api_key, databaseId: settings.notion_database_id };
+
   const term = await getTermById(supabase, termId);
   if (!term) throw new Error('Term not found');
 
@@ -70,7 +82,7 @@ export async function addRefinementToNotion(termId: number, refinementId: number
 
   let pageId = term.notion_page_id;
   if (!pageId) {
-    pageId = await createNotionPage({
+    pageId = await createNotionPage(credentials, {
       name: term.name,
       content: term.content,
       categories: term.categories,
@@ -80,6 +92,7 @@ export async function addRefinementToNotion(termId: number, refinementId: number
   }
 
   await appendRefinementToNotionPage(
+    credentials,
     pageId,
     {
       refinement: refinement.refinement,

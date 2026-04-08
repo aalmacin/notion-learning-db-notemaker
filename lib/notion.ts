@@ -1,16 +1,27 @@
 import { Client } from '@notionhq/client';
-import type { BlockObjectRequest } from '@notionhq/client/build/src/api-endpoints';
+import type {
+  BlockObjectRequest,
+  DataSourceObjectResponse,
+} from '@notionhq/client/build/src/api-endpoints';
 
-const client = new Client({ auth: process.env.NOTION_API_KEY });
+type NotionCredentials = { apiKey: string; databaseId: string };
 
-export async function createNotionPage(term: {
-  name: string;
-  content: string;
-  categories: string[];
-  priority: string;
-}): Promise<string> {
+function getClient(credentials: NotionCredentials) {
+  return new Client({ auth: credentials.apiKey });
+}
+
+export async function createNotionPage(
+  credentials: NotionCredentials,
+  term: {
+    name: string;
+    content: string;
+    categories: string[];
+    priority: string;
+  },
+): Promise<string> {
+  const client = getClient(credentials);
   const response = await client.pages.create({
-    parent: { database_id: process.env.NOTION_DATABASE_ID as string },
+    parent: { data_source_id: credentials.databaseId },
     properties: {
       Study: {
         title: [{ text: { content: term.name } }],
@@ -74,6 +85,7 @@ function parseMarkdownToNotionBlocks(markdown: string): BlockObjectRequest[] {
 }
 
 export async function appendRefinementToNotionPage(
+  credentials: NotionCredentials,
   pageId: string,
   refinement: {
     refinement: string;
@@ -82,6 +94,7 @@ export async function appendRefinementToNotionPage(
   },
   termName: string,
 ): Promise<void> {
+  const client = getClient(credentials);
   const today = new Date();
   const dateStr = today.toISOString().split('T')[0];
   const formattedDate = today.toLocaleDateString('en-US', {
@@ -144,4 +157,20 @@ export async function appendRefinementToNotionPage(
       ...parseMarkdownToNotionBlocks(refinement.refinement_additional_note),
     ],
   });
+}
+
+export async function getNotionDatabases(
+  apiKey: string,
+): Promise<{ id: string; title: string }[]> {
+  const client = new Client({ auth: apiKey });
+  const response = await client.search({
+    filter: { value: 'data_source', property: 'object' },
+    page_size: 100,
+  });
+  return response.results
+    .filter((r): r is DataSourceObjectResponse => r.object === 'data_source')
+    .map((db) => ({
+      id: db.id,
+      title: db.title[0]?.plain_text ?? 'Untitled',
+    }));
 }
