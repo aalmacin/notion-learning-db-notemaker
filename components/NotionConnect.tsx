@@ -1,7 +1,8 @@
 'use client';
 
 import { useTransition } from 'react';
-import { saveNotionDatabaseId, disconnectNotion } from '@/actions/settings';
+import { useRouter } from 'next/navigation';
+import { saveNotionDatabaseId, disconnectNotion, createNotionDataSource } from '@/actions/settings';
 
 type Database = { id: string; title: string };
 
@@ -13,6 +14,7 @@ type Props = {
 
 export function NotionConnect({ isConnected, databases, currentDatabaseId }: Props) {
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   const currentDatabase = databases.find((db) => db.id === currentDatabaseId);
 
@@ -25,6 +27,13 @@ export function NotionConnect({ isConnected, databases, currentDatabaseId }: Pro
   function handleDisconnect() {
     startTransition(async () => {
       await disconnectNotion();
+    });
+  }
+
+  function handleCreateDataSource() {
+    startTransition(async () => {
+      await createNotionDataSource();
+      router.refresh();
     });
   }
 
@@ -59,6 +68,13 @@ export function NotionConnect({ isConnected, databases, currentDatabaseId }: Pro
           </button>
         </div>
         <p className="text-sm text-zinc-600 dark:text-zinc-400">Select a database to use:</p>
+        <button
+          onClick={handleCreateDataSource}
+          disabled={isPending}
+          className="inline-flex w-fit items-center gap-2 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-1.5 text-sm text-zinc-700 dark:text-zinc-200 hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors disabled:opacity-50"
+        >
+          {isPending ? 'Creating...' : 'Create data source'}
+        </button>
         {databases.length === 0 ? (
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
             No databases found. Make sure you granted access to at least one database during the
@@ -103,6 +119,13 @@ export function NotionConnect({ isConnected, databases, currentDatabaseId }: Pro
           Disconnect
         </button>
       </div>
+      <button
+        onClick={handleCreateDataSource}
+        disabled={isPending}
+        className="inline-flex w-fit items-center gap-2 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-1.5 text-sm text-zinc-700 dark:text-zinc-200 hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors disabled:opacity-50"
+      >
+        {isPending ? 'Creating...' : 'Create data source'}
+      </button>
     </div>
   );
 }

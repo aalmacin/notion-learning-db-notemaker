@@ -174,3 +174,45 @@ export async function getNotionDatabases(
       title: db.title[0]?.plain_text ?? 'Untitled',
     }));
 }
+
+export async function createNotionDataSource(
+  apiKey: string,
+): Promise<{ id: string; title: string }> {
+  const client = new Client({ auth: apiKey });
+  const database = await client.databases.create({
+    parent: { type: 'workspace', workspace: true },
+    title: [{ type: 'text', text: { content: 'Notemaker Terms' } }],
+    initial_data_source: {
+      properties: {
+        Study: { title: {} },
+        Category: { multi_select: {} },
+        Priority: {
+          select: {
+            options: [
+              { name: 'High', color: 'red' },
+              { name: 'Medium', color: 'yellow' },
+              { name: 'Low', color: 'blue' },
+            ],
+          },
+        },
+        'Daily Learning Done': { checkbox: {} },
+        Date: { date: {} },
+      },
+    },
+  });
+
+  let dataSourceId = database.data_sources?.[0]?.id;
+  if (!dataSourceId) {
+    const hydrated = await client.databases.retrieve({ database_id: database.id });
+    dataSourceId = hydrated.data_sources?.[0]?.id;
+  }
+
+  if (!dataSourceId) {
+    throw new Error('Failed to resolve Notion data source id for the new database.');
+  }
+
+  return {
+    id: dataSourceId,
+    title: database.title?.[0]?.plain_text ?? 'Notemaker Terms',
+  };
+}
