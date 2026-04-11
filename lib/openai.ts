@@ -111,12 +111,13 @@ export async function evaluateRefinement(
   };
 }
 
-export async function explainTermWithAI(term: string, allowedCategories: string[]): Promise<TermExplanation> {
+export async function explainTermWithAI(term: string, allowedCategories: string[], context?: string): Promise<TermExplanation> {
+  const userContent = context ? `Term: ${term}\nContext: ${context}` : term;
   const response = await client.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
       { role: 'system', content: buildSystemPrompt(allowedCategories) },
-      { role: 'user', content: term },
+      { role: 'user', content: userContent },
     ],
     response_format: { type: 'json_object' },
   });
