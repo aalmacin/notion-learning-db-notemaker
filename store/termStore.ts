@@ -1,13 +1,10 @@
 import { Store } from '@tanstack/store'
+import type { Term } from '@/lib/db'
 
-export interface TermResult {
-  id: number
-  name: string
-  content: string
-  categories: string[]
-  notion_page_id: string | null
-  priority: string
-}
+export type PendingTermResult = { status: 'processing'; name: string }
+export type ErrorTermResult = { status: 'error'; name: string; error: string }
+export type DoneTermResult = Term & { status: 'done' }
+export type TermResult = PendingTermResult | ErrorTermResult | DoneTermResult
 
 interface TermState {
   activeTerms: TermResult[]
@@ -19,24 +16,56 @@ export const termStore = new Store<TermState>({
   isResultVisible: false,
 })
 
-export function setActiveTerm(term: TermResult) {
-  termStore.setState(() => ({ activeTerms: [term], isResultVisible: true }))
+export function addPendingTerm(name: string) {
+  const pending: PendingTermResult = { status: 'processing', name }
+  termStore.setState((state) => ({ activeTerms: [...state.activeTerms, pending], isResultVisible: true }))
 }
 
-export function setActiveTerms(terms: TermResult[]) {
-  termStore.setState(() => ({ activeTerms: terms, isResultVisible: terms.length > 0 }))
+export function addPendingTerms(names: string[]) {
+  const pending: PendingTermResult[] = names.map((name) => ({ status: 'processing', name }))
+  termStore.setState((state) => ({
+    activeTerms: [...state.activeTerms, ...pending],
+    isResultVisible: true,
+  }))
 }
 
-export function updateTermInStore(term: TermResult) {
+export function resolveTermResult(pendingName: string, term: Term) {
   termStore.setState((state) => ({
     ...state,
-    activeTerms: state.activeTerms.map((t) => (t.id === term.id ? term : t)),
+    activeTerms: state.activeTerms.map((t) =>
+      t.name === pendingName ? ({ ...term, status: 'done' } as DoneTermResult) : t
+    ),
   }))
+}
+
+export function rejectTermResult(pendingName: string, error: string) {
+  termStore.setState((state) => ({
+    ...state,
+    activeTerms: state.activeTerms.map((t) =>
+      t.name === pendingName ? ({ status: 'error', name: t.name, error } as ErrorTermResult) : t
+    ),
+  }))
+}
+
+export function updateTermInStore(term: Term) {
+  termStore.setState((state) => ({
+    ...state,
+    activeTerms: state.activeTerms.map((t) =>
+      t.status === 'done' && t.id === term.id ? ({ ...term, status: 'done' } as DoneTermResult) : t
+    ),
+  }))
+}
+
+export function dismissTerm(name: string) {
+  termStore.setState((state) => {
+    const activeTerms = state.activeTerms.filter((t) => t.name !== name)
+    return { activeTerms, isResultVisible: activeTerms.length > 0 }
+  })
 }
 
 export function removeTermFromStore(id: number) {
   termStore.setState((state) => {
-    const activeTerms = state.activeTerms.filter((t) => t.id !== id)
+    const activeTerms = state.activeTerms.filter((t) => t.status !== 'done' || t.id !== id)
     return { activeTerms, isResultVisible: activeTerms.length > 0 }
   })
 }
