@@ -13,7 +13,8 @@ export function TermForm() {
   const [batchCount, setBatchCount] = useState<number | null>(null)
 
   const singleMutation = useMutation({
-    mutationFn: (termName: string) => explainTerm(termName),
+    mutationFn: ({ termName, context }: { termName: string; context?: string }) =>
+      explainTerm(termName, context || undefined),
     onSuccess: (term) => {
       setActiveTerm(term)
       singleForm.reset()
@@ -22,8 +23,8 @@ export function TermForm() {
   })
 
   const multipleMutation = useMutation({
-    mutationFn: async (terms: string[]) => {
-      const results = await Promise.all(terms.map((t) => explainTerm(t)))
+    mutationFn: async ({ terms, context }: { terms: string[]; context?: string }) => {
+      const results = await Promise.all(terms.map((t) => explainTerm(t, context || undefined)))
       return results
     },
     onSuccess: (terms) => {
@@ -34,15 +35,15 @@ export function TermForm() {
   })
 
   const singleForm = useForm({
-    defaultValues: { termName: '' },
+    defaultValues: { termName: '', context: '' },
     onSubmit: async ({ value }) => {
       setBatchCount(null)
-      await singleMutation.mutateAsync(value.termName)
+      await singleMutation.mutateAsync({ termName: value.termName, context: value.context })
     },
   })
 
   const multipleForm = useForm({
-    defaultValues: { terms: '' },
+    defaultValues: { terms: '', context: '' },
     onSubmit: async ({ value }) => {
       const terms = value.terms
         .split('\n')
@@ -50,7 +51,7 @@ export function TermForm() {
         .filter((t) => t.length >= 2)
       if (terms.length === 0) return
       setBatchCount(null)
-      await multipleMutation.mutateAsync(terms)
+      await multipleMutation.mutateAsync({ terms, context: value.context })
     },
   })
 
@@ -117,6 +118,25 @@ export function TermForm() {
             )}
           </singleForm.Field>
 
+          <singleForm.Field name="context">
+            {(field) => (
+              <div className="flex flex-col gap-1">
+                <label htmlFor={field.name} className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Context <span className="text-zinc-400 dark:text-zinc-500 font-normal">(optional)</span>
+                </label>
+                <input
+                  id={field.name}
+                  name={field.name}
+                  value={field.state.value}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                  onBlur={field.handleBlur}
+                  placeholder="e.g. Kubernetes, AWS, React"
+                  className={inputClass}
+                />
+              </div>
+            )}
+          </singleForm.Field>
+
           {singleMutation.error && (
             <p className="text-sm text-red-600 dark:text-red-400">
               {singleMutation.error instanceof Error ? singleMutation.error.message : 'Something went wrong'}
@@ -170,6 +190,25 @@ export function TermForm() {
                 {field.state.meta.errors.length > 0 && (
                   <p className="text-xs text-red-600 dark:text-red-400">{field.state.meta.errors[0]}</p>
                 )}
+              </div>
+            )}
+          </multipleForm.Field>
+
+          <multipleForm.Field name="context">
+            {(field) => (
+              <div className="flex flex-col gap-1">
+                <label htmlFor={field.name} className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Context <span className="text-zinc-400 dark:text-zinc-500 font-normal">(optional — applies to all terms)</span>
+                </label>
+                <input
+                  id={field.name}
+                  name={field.name}
+                  value={field.state.value}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                  onBlur={field.handleBlur}
+                  placeholder="e.g. Kubernetes, AWS, React"
+                  className={inputClass}
+                />
               </div>
             )}
           </multipleForm.Field>

@@ -20,11 +20,11 @@ export async function updateTermPriority(id: number, priority: Priority): Promis
   return updated;
 }
 
-export async function regenerateTerm(id: number, name: string): Promise<Term> {
+export async function regenerateTerm(id: number, name: string, context?: string): Promise<Term> {
   const supabase = await createSupabaseServerClient();
   const dbCategories = await getAllCategories(supabase);
   const categoryNames = dbCategories.map((c) => c.name);
-  const explanation = await explainTermWithAI(name, categoryNames);
+  const explanation = await explainTermWithAI(name, categoryNames, context);
   const updated = await updateTerm(supabase, id, {
     content: explanation.content,
     categories: explanation.categories,
