@@ -201,10 +201,10 @@ export async function createNotionDataSource(
     },
   });
 
-  let dataSourceId = database.data_sources?.[0]?.id;
+  let dataSourceId = 'data_sources' in database ? database.data_sources[0]?.id : undefined;
   if (!dataSourceId) {
     const hydrated = await client.databases.retrieve({ database_id: database.id });
-    dataSourceId = hydrated.data_sources?.[0]?.id;
+    dataSourceId = 'data_sources' in hydrated ? hydrated.data_sources[0]?.id : undefined;
   }
 
   if (!dataSourceId) {
@@ -213,6 +213,6 @@ export async function createNotionDataSource(
 
   return {
     id: dataSourceId,
-    title: database.title?.[0]?.plain_text ?? 'Notemaker Terms',
+    title: ('title' in database ? database.title[0]?.plain_text : undefined) ?? 'Notemaker Terms',
   };
 }
