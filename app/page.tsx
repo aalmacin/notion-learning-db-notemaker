@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { TermForm } from '@/components/TermForm'
 import { TermResult } from '@/components/TermResult'
+import { signOut } from '@/actions/auth'
 
 export default function Home() {
   return (
@@ -21,6 +22,20 @@ export default function Home() {
             >
               Categories
             </Link>
+            <Link
+              href="/settings"
+              className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50 transition-colors"
+            >
+              Settings
+            </Link>
+            <form action={signOut}>
+              <button
+                type="submit"
+                className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50 transition-colors"
+              >
+                Sign out
+              </button>
+            </form>
           </nav>
         </div>
       </header>

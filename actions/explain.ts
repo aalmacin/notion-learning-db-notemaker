@@ -1,6 +1,6 @@
 'use server';
 
-import { getTerm, insertTerm } from '@/lib/db';
+import { getTerm, insertTerm, getAllCategories } from '@/lib/db';
 import { explainTermWithAI } from '@/lib/openai';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type { Term } from '@/lib/db';
@@ -14,7 +14,9 @@ export async function explainTerm(rawName: string): Promise<Term> {
   const cached = await getTerm(supabase, name);
   if (cached) return cached;
 
-  const explanation = await explainTermWithAI(name);
+  const dbCategories = await getAllCategories(supabase);
+  const categoryNames = dbCategories.map((c) => c.name);
+  const explanation = await explainTermWithAI(name, categoryNames);
 
   return insertTerm(supabase, {
     name: explanation.name.trim(),

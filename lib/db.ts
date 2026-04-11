@@ -2,6 +2,13 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type Priority = 'High' | 'Medium' | 'Low';
 
+export type UserSettings = {
+  user_id: string;
+  notion_api_key: string | null;
+  notion_database_id: string | null;
+  updated_at: string;
+};
+
 export type Term = {
   id: number;
   name: string;
@@ -339,5 +346,55 @@ export async function deleteConceptRefinement(
   id: number,
 ): Promise<void> {
   const { error } = await supabase.from('concept_refinements').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function getUserSettings(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<UserSettings | null> {
+  const { data, error } = await supabase
+    .from('user_settings')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data as UserSettings | null;
+}
+
+export async function upsertUserSettings(
+  supabase: SupabaseClient,
+  userId: string,
+  settings: { notion_api_key: string | null; notion_database_id: string | null },
+): Promise<UserSettings> {
+  const { data, error } = await supabase
+    .from('user_settings')
+    .upsert({ user_id: userId, ...settings, updated_at: new Date().toISOString() })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as UserSettings;
+}
+
+export async function updateNotionDatabaseId(
+  supabase: SupabaseClient,
+  userId: string,
+  databaseId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('user_settings')
+    .update({ notion_database_id: databaseId, updated_at: new Date().toISOString() })
+    .eq('user_id', userId);
+  if (error) throw error;
+}
+
+export async function clearNotionCredentials(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('user_settings')
+    .update({ notion_api_key: null, notion_database_id: null, updated_at: new Date().toISOString() })
+    .eq('user_id', userId);
   if (error) throw error;
 }
