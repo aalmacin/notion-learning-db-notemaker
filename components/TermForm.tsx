@@ -1,44 +1,24 @@
 'use client'
 
-import { useState } from 'react'
 import { useForm } from '@tanstack/react-form'
-import { useMutation } from '@tanstack/react-query'
+import { useState } from 'react'
 import { explainTerm } from '@/actions/explain'
-import { setActiveTerm, setActiveTerms } from '@/store/termStore'
+import { addPendingTerm, addPendingTerms, resolveTermResult, rejectTermResult } from '@/store/termStore'
 
 type Mode = 'single' | 'multiple'
 
 export function TermForm() {
   const [mode, setMode] = useState<Mode>('single')
-  const [batchCount, setBatchCount] = useState<number | null>(null)
-
-  const singleMutation = useMutation({
-    mutationFn: ({ termName, context }: { termName: string; context?: string }) =>
-      explainTerm(termName, context || undefined),
-    onSuccess: (term) => {
-      setActiveTerm(term)
-      singleForm.reset()
-      setBatchCount(null)
-    },
-  })
-
-  const multipleMutation = useMutation({
-    mutationFn: async ({ terms, context }: { terms: string[]; context?: string }) => {
-      const results = await Promise.all(terms.map((t) => explainTerm(t, context || undefined)))
-      return results
-    },
-    onSuccess: (terms) => {
-      setActiveTerms(terms)
-      multipleForm.reset()
-      setBatchCount(terms.length)
-    },
-  })
 
   const singleForm = useForm({
     defaultValues: { termName: '', context: '' },
     onSubmit: async ({ value }) => {
-      setBatchCount(null)
-      await singleMutation.mutateAsync({ termName: value.termName, context: value.context })
+      const name = value.termName.trim().toLowerCase()
+      addPendingTerm(name)
+      singleForm.reset()
+      explainTerm(value.termName, value.context || undefined)
+        .then((term) => resolveTermResult(name, term))
+        .catch((e) => rejectTermResult(name, e instanceof Error ? e.message : 'Something went wrong'))
     },
   })
 
@@ -50,8 +30,15 @@ export function TermForm() {
         .map((t) => t.trim())
         .filter((t) => t.length >= 2)
       if (terms.length === 0) return
-      setBatchCount(null)
-      await multipleMutation.mutateAsync({ terms, context: value.context })
+      const names = terms.map((t) => t.toLowerCase())
+      addPendingTerms(names)
+      multipleForm.reset()
+      terms.forEach((termName) => {
+        const name = termName.toLowerCase()
+        explainTerm(termName, value.context || undefined)
+          .then((term) => resolveTermResult(name, term))
+          .catch((e) => rejectTermResult(name, e instanceof Error ? e.message : 'Something went wrong'))
+      })
     },
   })
 
@@ -137,18 +124,11 @@ export function TermForm() {
             )}
           </singleForm.Field>
 
-          {singleMutation.error && (
-            <p className="text-sm text-red-600 dark:text-red-400">
-              {singleMutation.error instanceof Error ? singleMutation.error.message : 'Something went wrong'}
-            </p>
-          )}
-
           <button
             type="submit"
-            disabled={singleMutation.isPending}
-            className="self-start rounded-lg bg-zinc-900 dark:bg-zinc-50 px-4 py-2 text-sm font-medium text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="self-start rounded-lg bg-zinc-900 dark:bg-zinc-50 px-4 py-2 text-sm font-medium text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors"
           >
-            {singleMutation.isPending ? 'Explaining…' : 'Explain'}
+            Explain
           </button>
         </form>
       ) : (
@@ -213,22 +193,11 @@ export function TermForm() {
             )}
           </multipleForm.Field>
 
-          {multipleMutation.error && (
-            <p className="text-sm text-red-600 dark:text-red-400">
-              {multipleMutation.error instanceof Error ? multipleMutation.error.message : 'Something went wrong'}
-            </p>
-          )}
-
-          {batchCount !== null && !multipleMutation.isPending && (
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">{batchCount} term{batchCount !== 1 ? 's' : ''} explained.</p>
-          )}
-
           <button
             type="submit"
-            disabled={multipleMutation.isPending}
-            className="self-start rounded-lg bg-zinc-900 dark:bg-zinc-50 px-4 py-2 text-sm font-medium text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="self-start rounded-lg bg-zinc-900 dark:bg-zinc-50 px-4 py-2 text-sm font-medium text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors"
           >
-            {multipleMutation.isPending ? 'Explaining…' : 'Explain All'}
+            Explain All
           </button>
         </form>
       )}
