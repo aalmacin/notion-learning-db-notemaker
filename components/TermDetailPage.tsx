@@ -6,6 +6,7 @@ import type { Term, ConceptRefinement } from '@/lib/db';
 import {
   submitPreRefinement,
   submitRefinement,
+  submitRefinementOnly,
   addRefinementToNotion,
 } from '@/actions/refinements';
 import { addToNotion } from '@/actions/notion';
@@ -15,7 +16,7 @@ type Props = {
   initialRefinements: ConceptRefinement[];
 };
 
-type ViewMode = { type: 'form' } | { type: 'attempt'; index: number };
+type ViewMode = { type: 'form' } | { type: 'refinement-only-form' } | { type: 'attempt'; index: number };
 
 function accuracyColor(accuracy: number): string {
   if (accuracy >= 80) return 'text-green-600 dark:text-green-400';
@@ -50,6 +51,7 @@ export function TermDetailPage({ term, initialRefinements }: Props) {
 
   const [isPendingPre, startPre] = useTransition();
   const [isPendingRefinement, startRefinement] = useTransition();
+  const [isPendingRefinementOnly, startRefinementOnly] = useTransition();
   const [isPendingNotion, startNotion] = useTransition();
   const [isPendingTermNotion, startTermNotion] = useTransition();
 
@@ -59,7 +61,8 @@ export function TermDetailPage({ term, initialRefinements }: Props) {
 
   const isComplete = (r: ConceptRefinement) => r.refinement_formatted_note !== null;
   const isAwaitingRefinement = (r: ConceptRefinement) =>
-    r.pre_refinement_accuracy !== null && r.refinement_formatted_note === null;
+    r.refinement_formatted_note === null &&
+    (!r.pre_refinement || r.pre_refinement_accuracy !== null);
 
   const handleSubmitPre = () => {
     if (!preText.trim()) return;
@@ -105,9 +108,25 @@ export function TermDetailPage({ term, initialRefinements }: Props) {
     });
   };
 
+  const handleSubmitRefinementOnly = () => {
+    if (!refinementText.trim()) return;
+    setError(null);
+    startRefinementOnly(async () => {
+      try {
+        const result = await submitRefinementOnly(term.id, refinementText.trim());
+        setRefinements((prev) => [result, ...prev]);
+        setViewMode({ type: 'attempt', index: 0 });
+        setRefinementText('');
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to submit');
+      }
+    });
+  };
+
   const handleStartNewAttempt = () => {
-    setViewMode({ type: 'form' });
-    setPreText('');
+    // On subsequent attempts the user is no longer "cold", skip straight to step 3
+    setViewMode({ type: 'refinement-only-form' });
+    setRefinementText('');
     setError(null);
     setNotionDone(false);
   };
@@ -201,7 +220,7 @@ export function TermDetailPage({ term, initialRefinements }: Props) {
             </div>
           )}
 
-          {/* Step 1 — Pre-refinement form */}
+          {/* Step 1 — Pre-refinement form (first attempt only) */}
           {notionPageId && viewMode.type === 'form' && (
             <div className="space-y-3">
               <StepLabel n={1} label="Cold Explanation" />
@@ -228,31 +247,97 @@ export function TermDetailPage({ term, initialRefinements }: Props) {
             </div>
           )}
 
-          {/* Attempt view */}
-          {notionPageId && viewMode.type === 'attempt' && viewing && (
+          {/* Step 3 — Direct refined explanation form (subsequent attempts) */}
+          {notionPageId && viewMode.type === 'refinement-only-form' && (
             <div className="space-y-6">
-              {/* Step 1 result */}
               <div className="space-y-3">
-                <StepLabel n={1} label="Cold Explanation" />
-                <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-4 space-y-3">
-                  <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-6">
-                    {viewing.pre_refinement}
+                <StepLabel n={3} label="Refined Explanation" />
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Explain <strong>{term.name}</strong> after researching.
+                </p>
+                <textarea
+                  value={refinementText}
+                  onChange={(e) => setRefinementText(e.target.value)}
+                  rows={5}
+                  placeholder="Explain the concept again after researching…"
+                  className="w-full px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-700 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-300 dark:focus:ring-zinc-600 resize-none"
+                />
+                {error && (
+                  <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
+                )}
+                <button
+                  onClick={handleSubmitRefinementOnly}
+                  disabled={!refinementText.trim() || isPendingRefinementOnly}
+                  className="px-4 py-2 text-sm font-medium rounded-lg bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isPendingRefinementOnly ? 'Evaluating…' : 'Submit'}
+                </button>
+              </div>
+
+              {/* Previous attempt shown as reference */}
+              {latest && (
+                <div className="space-y-4 border-t border-zinc-100 dark:border-zinc-800 pt-5">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                    Previous Attempt
                   </p>
-                  {viewing.pre_refinement_accuracy !== null && (
-                    <div className="pt-3 border-t border-zinc-200 dark:border-zinc-700 space-y-1">
-                      <p className={`text-sm font-semibold ${accuracyColor(viewing.pre_refinement_accuracy)}`}>
-                        Accuracy: {viewing.pre_refinement_accuracy}%
-                      </p>
-                      <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-5">
-                        {viewing.pre_refinement_review}
-                      </p>
+                  {latest.pre_refinement && (
+                    <div className="space-y-2">
+                      <StepLabel n={1} label="Cold Explanation" />
+                      <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-3 space-y-2">
+                        <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-5">{latest.pre_refinement}</p>
+                        {latest.pre_refinement_accuracy !== null && (
+                          <p className={`text-xs font-medium ${accuracyColor(latest.pre_refinement_accuracy)}`}>
+                            Accuracy: {latest.pre_refinement_accuracy}%
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {latest.refinement && (
+                    <div className="space-y-2">
+                      <StepLabel n={3} label="Refined Explanation" />
+                      <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-3 space-y-2">
+                        <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-5">{latest.refinement}</p>
+                        {latest.refinement_accuracy !== null && (
+                          <p className={`text-xs font-medium ${accuracyColor(latest.refinement_accuracy)}`}>
+                            Accuracy: {latest.refinement_accuracy}%
+                          </p>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
-              </div>
+              )}
+            </div>
+          )}
+
+          {/* Attempt view */}
+          {notionPageId && viewMode.type === 'attempt' && viewing && (
+            <div className="space-y-6">
+              {/* Step 1 result — hidden for refinement-only attempts */}
+              {viewing.pre_refinement && (
+                <div className="space-y-3">
+                  <StepLabel n={1} label="Cold Explanation" />
+                  <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-4 space-y-3">
+                    <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-6">
+                      {viewing.pre_refinement}
+                    </p>
+                    {viewing.pre_refinement_accuracy !== null && (
+                      <div className="pt-3 border-t border-zinc-200 dark:border-zinc-700 space-y-1">
+                        <p className={`text-sm font-semibold ${accuracyColor(viewing.pre_refinement_accuracy)}`}>
+                          Accuracy: {viewing.pre_refinement_accuracy}%
+                        </p>
+                        <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-5">
+                          {viewing.pre_refinement_review}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Step 2 — Research prompt (only shown when step 1 done but not step 3) */}
-              {viewing.pre_refinement_accuracy !== null && !isComplete(viewing) && (
+              {viewing.pre_refinement && viewing.pre_refinement_accuracy !== null && !isComplete(viewing) && (
                 <div className="space-y-2">
                   <StepLabel n={2} label="Research" />
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -261,10 +346,17 @@ export function TermDetailPage({ term, initialRefinements }: Props) {
                 </div>
               )}
 
-              {/* Step 3 — Refinement */}
-              {viewing.pre_refinement_accuracy !== null && (
+              {/* Step 3 — Refinement (shown after step 1, or always for refinement-only attempts) */}
+              {(!viewing.pre_refinement || viewing.pre_refinement_accuracy !== null) && (
                 <div className="space-y-3">
                   <StepLabel n={3} label="Refined Explanation" />
+
+                  {/* Incomplete non-latest: nothing was saved */}
+                  {!isLatest && isAwaitingRefinement(viewing) && (
+                    <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                      This attempt did not complete — no data was saved.
+                    </p>
+                  )}
 
                   {/* Form — only on latest incomplete attempt */}
                   {isLatest && isAwaitingRefinement(viewing) && (

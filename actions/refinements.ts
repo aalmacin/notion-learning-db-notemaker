@@ -106,6 +106,30 @@ export async function addRefinementToNotion(termId: number, refinementId: number
   revalidatePath('/terms');
 }
 
+export async function submitRefinementOnly(
+  termId: number,
+  userExplanation: string,
+): Promise<ConceptRefinement> {
+  const supabase = await createSupabaseServerClient();
+  const term = await getTermById(supabase, termId);
+  if (!term) throw new Error('Term not found');
+
+  // Empty pre_refinement signals this attempt skipped the cold start step
+  const refinement = await createRefinement(supabase, termId, '');
+  const result = await evaluateRefinement(term.name, userExplanation);
+  const updated = await updateRefinementData(supabase, refinement.id, {
+    refinement: userExplanation,
+    refinement_accuracy: result.accuracy,
+    refinement_review: result.review,
+    refinement_formatted_note: result.formattedNote,
+    refinement_additional_note: result.additionalNote,
+  });
+
+  revalidatePath(`/terms/${termId}`);
+  revalidatePath('/terms');
+  return updated;
+}
+
 export async function removeRefinement(id: number, termId: number): Promise<void> {
   const supabase = await createSupabaseServerClient();
   await deleteConceptRefinement(supabase, id);
