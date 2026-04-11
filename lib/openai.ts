@@ -93,12 +93,25 @@ export async function evaluateRefinement(
   const raw = response.choices[0]?.message?.content;
   if (!raw) throw new Error('Empty response from OpenAI');
 
-  const parsed = JSON.parse(raw) as Partial<RefinementEvaluation>;
+  const parsed = JSON.parse(raw) as Partial<RefinementEvaluation> & Record<string, unknown>;
+  const formattedNote =
+    typeof parsed.formattedNote === 'string'
+      ? parsed.formattedNote
+      : typeof parsed.formatted_note === 'string'
+        ? parsed.formatted_note
+        : undefined;
+  const additionalNote =
+    typeof parsed.additionalNote === 'string'
+      ? parsed.additionalNote
+      : typeof parsed.additional_note === 'string'
+        ? parsed.additional_note
+        : undefined;
+
   if (
     typeof parsed.accuracy !== 'number' ||
     typeof parsed.review !== 'string' ||
-    typeof parsed.formattedNote !== 'string' ||
-    typeof parsed.additionalNote !== 'string'
+    typeof formattedNote !== 'string' ||
+    typeof additionalNote !== 'string'
   ) {
     throw new Error('Invalid response shape from OpenAI');
   }
@@ -106,8 +119,8 @@ export async function evaluateRefinement(
   return {
     accuracy: Math.min(100, Math.max(0, Math.round(parsed.accuracy))),
     review: parsed.review,
-    formattedNote: parsed.formattedNote,
-    additionalNote: parsed.additionalNote,
+    formattedNote,
+    additionalNote,
   };
 }
 
