@@ -20,7 +20,7 @@ export default async function TermsPage({
   const notionConfigured = !!(settings?.notion_api_key && settings?.notion_database_id);
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black p-8">
+    <div className="bg-zinc-50 dark:bg-black p-8">
       <div className="max-w-6xl mx-auto">
         {!notionConfigured && (
           <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950 px-4 py-3 flex items-center justify-between gap-4">
@@ -35,21 +35,7 @@ export default async function TermsPage({
             </Link>
           </div>
         )}
-        <div className="mb-6 flex items-center gap-4">
-          <Link
-            href="/"
-            className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-          >
-            ← Home
-          </Link>
-          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Terms</h1>
-          <Link
-            href="/categories"
-            className="ml-auto text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-          >
-            Manage Categories
-          </Link>
-        </div>
+        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50 mb-6">Terms</h1>
         <TermsTable initialData={terms} initialCategories={categories} initialCategory={initialCategory} />
       </div>
     </div>
