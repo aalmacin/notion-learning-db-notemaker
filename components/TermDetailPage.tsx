@@ -8,6 +8,7 @@ import {
   submitRefinement,
   addRefinementToNotion,
 } from '@/actions/refinements';
+import { addToNotion } from '@/actions/notion';
 
 type Props = {
   term: Term;
@@ -45,10 +46,12 @@ export function TermDetailPage({ term, initialRefinements }: Props) {
   const [refinementText, setRefinementText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [notionDone, setNotionDone] = useState(false);
+  const [notionPageId, setNotionPageId] = useState(term.notion_page_id);
 
   const [isPendingPre, startPre] = useTransition();
   const [isPendingRefinement, startRefinement] = useTransition();
   const [isPendingNotion, startNotion] = useTransition();
+  const [isPendingTermNotion, startTermNotion] = useTransition();
 
   const viewing = viewMode.type === 'attempt' ? (refinements[viewMode.index] ?? null) : null;
   const isLatest = viewMode.type === 'attempt' && viewMode.index === 0;
@@ -109,6 +112,23 @@ export function TermDetailPage({ term, initialRefinements }: Props) {
     setNotionDone(false);
   };
 
+  const handleAddTermToNotion = () => {
+    setError(null);
+    startTermNotion(async () => {
+      try {
+        const updated = await addToNotion(term.id, {
+          name: term.name,
+          content: term.content,
+          categories: term.categories,
+          priority: term.priority,
+        });
+        setNotionPageId(updated.notion_page_id);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to add to Notion');
+      }
+    });
+  };
+
   return (
     <div className="bg-zinc-50 dark:bg-black p-8">
       <div className="max-w-3xl mx-auto space-y-8">
@@ -164,8 +184,25 @@ export function TermDetailPage({ term, initialRefinements }: Props) {
             )}
           </div>
 
+          {/* Notion gate — must store term in Notion before starting */}
+          {!notionPageId && (
+            <div className="space-y-3">
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                Add this term to Notion before starting the Feynman method.
+              </p>
+              {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+              <button
+                onClick={handleAddTermToNotion}
+                disabled={isPendingTermNotion}
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {isPendingTermNotion ? 'Adding to Notion…' : 'Add to Notion'}
+              </button>
+            </div>
+          )}
+
           {/* Step 1 — Pre-refinement form */}
-          {viewMode.type === 'form' && (
+          {notionPageId && viewMode.type === 'form' && (
             <div className="space-y-3">
               <StepLabel n={1} label="Cold Explanation" />
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -192,7 +229,7 @@ export function TermDetailPage({ term, initialRefinements }: Props) {
           )}
 
           {/* Attempt view */}
-          {viewMode.type === 'attempt' && viewing && (
+          {notionPageId && viewMode.type === 'attempt' && viewing && (
             <div className="space-y-6">
               {/* Step 1 result */}
               <div className="space-y-3">
