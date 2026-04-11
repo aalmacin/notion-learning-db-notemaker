@@ -56,6 +56,13 @@ export function updateTermInStore(term: Term) {
   }))
 }
 
+export function dismissTerm(name: string) {
+  termStore.setState((state) => {
+    const activeTerms = state.activeTerms.filter((t) => t.name !== name)
+    return { activeTerms, isResultVisible: activeTerms.length > 0 }
+  })
+}
+
 export function removeTermFromStore(id: number) {
   termStore.setState((state) => {
     const activeTerms = state.activeTerms.filter((t) => t.status !== 'done' || t.id !== id)
