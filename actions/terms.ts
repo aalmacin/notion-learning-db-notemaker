@@ -1,6 +1,6 @@
 'use server';
 
-import { deleteTerm as dbDeleteTerm, updateTerm } from '@/lib/db';
+import { deleteTerm as dbDeleteTerm, updateTerm, getAllCategories } from '@/lib/db';
 import { explainTermWithAI } from '@/lib/openai';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
@@ -21,8 +21,10 @@ export async function updateTermPriority(id: number, priority: Priority): Promis
 }
 
 export async function regenerateTerm(id: number, name: string): Promise<Term> {
-  const explanation = await explainTermWithAI(name);
   const supabase = await createSupabaseServerClient();
+  const dbCategories = await getAllCategories(supabase);
+  const categoryNames = dbCategories.map((c) => c.name);
+  const explanation = await explainTermWithAI(name, categoryNames);
   const updated = await updateTerm(supabase, id, {
     content: explanation.content,
     categories: explanation.categories,
