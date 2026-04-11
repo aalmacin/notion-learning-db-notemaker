@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { Term, ConceptRefinement } from '@/lib/db';
 import {
@@ -111,18 +110,9 @@ export function TermDetailPage({ term, initialRefinements }: Props) {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black p-8">
+    <div className="bg-zinc-50 dark:bg-black p-8">
       <div className="max-w-3xl mx-auto space-y-8">
-        {/* Header */}
-        <div className="flex items-center gap-4">
-          <Link
-            href="/terms"
-            className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-          >
-            ← Terms
-          </Link>
-          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{term.name}</h1>
-        </div>
+        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{term.name}</h1>
 
         {/* Term card */}
         <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-6 space-y-4">
