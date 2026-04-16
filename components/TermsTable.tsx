@@ -138,7 +138,7 @@ export function TermsTable({ initialData, initialCategories, initialCategory }: 
   const [expanded, setExpanded] = useState<ExpandedState>({});
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
   const [notionSuccessId, setNotionSuccessId] = useState<number | null>(null);
-  const [notionFilter, setNotionFilter] = useState<'all' | 'pending' | 'added'>('pending');
+  const [notionFilter, setNotionFilter] = useState<'all' | 'pending' | 'added'>('all');
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<number | null>(null);
   const [deleteSuccess, setDeleteSuccess] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
@@ -424,7 +424,7 @@ export function TermsTable({ initialData, initialCategories, initialCategory }: 
           {syncMutation.isPending ? 'Syncing…' : 'Sync with Notion'}
         </button>
         <div className="flex items-center gap-1 border border-zinc-200 dark:border-zinc-700 rounded-lg overflow-hidden">
-          {(['pending', 'all', 'added'] as const).map((val) => (
+          {(['all', 'pending', 'added'] as const).map((val) => (
             <button
               key={val}
               onClick={() => { setNotionFilter(val); setPagination((p) => ({ ...p, pageIndex: 0 })); }}
