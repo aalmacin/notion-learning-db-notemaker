@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   useReactTable,
@@ -129,6 +129,86 @@ function PriorityEditor({ term, onSaved }: { term: Term; onSaved: (updated: Term
   );
 }
 
+function CategoryFilterDropdown({ categories, selected, onChange }: {
+  categories: string[];
+  selected: string[];
+  onChange: (cats: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const filtered = categories.filter((c) => c.toLowerCase().includes(search.toLowerCase()));
+
+  const toggle = (cat: string) =>
+    onChange(selected.includes(cat) ? selected.filter((c) => c !== cat) : [...selected, cat]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+      >
+        {selected.length > 0 ? `${selected.length} categor${selected.length === 1 ? 'y' : 'ies'}` : 'Filter by category'}
+        <span className="text-zinc-400">▾</span>
+      </button>
+      {open && (
+        <div className="absolute z-10 mt-1 w-56 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg">
+          <div className="p-2 border-b border-zinc-100 dark:border-zinc-800">
+            <input
+              type="text"
+              placeholder="Search categories…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full px-2 py-1.5 text-xs rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-300 dark:focus:ring-zinc-600"
+              autoFocus
+            />
+          </div>
+          <ul className="max-h-48 overflow-y-auto py-1">
+            {filtered.length === 0 ? (
+              <li className="px-3 py-2 text-xs text-zinc-400">No categories found</li>
+            ) : (
+              filtered.map((cat) => (
+                <li key={cat}>
+                  <label className="flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selected.includes(cat)}
+                      onChange={() => toggle(cat)}
+                      className="accent-zinc-900 dark:accent-zinc-50"
+                    />
+                    {cat}
+                  </label>
+                </li>
+              ))
+            )}
+          </ul>
+          {selected.length > 0 && (
+            <div className="p-2 border-t border-zinc-100 dark:border-zinc-800">
+              <button
+                type="button"
+                onClick={() => onChange([])}
+                className="text-xs text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function TermsTable({ initialData, initialCategories, initialCategory }: { initialData: Term[]; initialCategories: Category[]; initialCategory?: string }) {
   const queryClient = useQueryClient();
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -139,6 +219,7 @@ export function TermsTable({ initialData, initialCategories, initialCategory }: 
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
   const [notionSuccessId, setNotionSuccessId] = useState<number | null>(null);
   const [notionFilter, setNotionFilter] = useState<'all' | 'pending' | 'added'>('all');
+  const [priorityFilter, setPriorityFilter] = useState<'all' | Priority>('all');
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<number | null>(null);
   const [deleteSuccess, setDeleteSuccess] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
@@ -168,9 +249,10 @@ export function TermsTable({ initialData, initialCategories, initialCategory }: 
       if (notionFilter === 'pending' && term.notion_page_id !== null) return false;
       if (notionFilter === 'added' && term.notion_page_id === null) return false;
       if (selectedCategories.length > 0 && !selectedCategories.every((cat) => term.categories.includes(cat))) return false;
+      if (priorityFilter !== 'all' && term.priority !== priorityFilter) return false;
       return true;
     });
-  }, [data, selectedCategories, notionFilter]);
+  }, [data, selectedCategories, notionFilter, priorityFilter]);
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => deleteTerm(id),
@@ -375,13 +457,6 @@ export function TermsTable({ initialData, initialCategories, initialCategory }: 
     getRowCanExpand: () => true,
   });
 
-  const toggleCategory = (cat: string) => {
-    setPagination((p) => ({ ...p, pageIndex: 0 }));
-    setSelectedCategories((prev) =>
-      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
-    );
-  };
-
   const { pageIndex, pageSize } = table.getState().pagination;
   const pageCount = table.getPageCount();
   const totalFiltered = table.getFilteredRowModel().rows.length;
@@ -438,34 +513,30 @@ export function TermsTable({ initialData, initialCategories, initialCategory }: 
             </button>
           ))}
         </div>
+        <div className="flex items-center gap-1 border border-zinc-200 dark:border-zinc-700 rounded-lg overflow-hidden">
+          {(['all', ...PRIORITIES] as const).map((val) => (
+            <button
+              key={val}
+              onClick={() => { setPriorityFilter(val); setPagination((p) => ({ ...p, pageIndex: 0 })); }}
+              className={`px-3 py-2 text-xs font-medium transition-colors ${
+                priorityFilter === val
+                  ? 'bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900'
+                  : 'bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+              }`}
+            >
+              {val === 'all' ? 'All priorities' : val}
+            </button>
+          ))}
+        </div>
         {filterCategoryNames.length > 0 && (
-          <div className="flex flex-wrap gap-2 items-center">
-            <span className="text-xs text-zinc-500 dark:text-zinc-400">Filter by category:</span>
-            {filterCategoryNames.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => toggleCategory(cat)}
-                className={`px-2 py-1 text-xs rounded-full border transition-colors ${
-                  selectedCategories.includes(cat)
-                    ? 'bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-50 dark:text-zinc-900 dark:border-zinc-50'
-                    : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400 dark:bg-zinc-900 dark:text-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-500'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-            {selectedCategories.length > 0 && (
-              <button
-                onClick={() => {
-                  setSelectedCategories([]);
-                  setPagination((p) => ({ ...p, pageIndex: 0 }));
-                }}
-                className="text-xs text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
-              >
-                Clear
-              </button>
-            )}
-          </div>
+          <CategoryFilterDropdown
+            categories={filterCategoryNames}
+            selected={selectedCategories}
+            onChange={(cats) => {
+              setSelectedCategories(cats);
+              setPagination((p) => ({ ...p, pageIndex: 0 }));
+            }}
+          />
         )}
       </div>
 
