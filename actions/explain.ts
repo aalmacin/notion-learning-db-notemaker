@@ -1,9 +1,9 @@
 'use server';
 
-import { getTerm, insertTerm, updateTerm, getAllCategories, getUserSettings } from '@/lib/db';
+import { getTerm, insertTerm, updateTerm, deleteTerm, getAllCategories, getUserSettings } from '@/lib/db';
 import { explainTermWithAI } from '@/lib/openai';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { createNotionPage } from '@/lib/notion';
+import { createNotionPage, archiveNotionPage } from '@/lib/notion';
 import type { Term } from '@/lib/db';
 
 export async function explainTerm(rawName: string, context?: string): Promise<Term> {
@@ -33,12 +33,24 @@ export async function explainTerm(rawName: string, context?: string): Promise<Te
   if (user) {
     const settings = await getUserSettings(supabase, user.id);
     if (settings?.notion_api_key && settings?.notion_database_id) {
-      const notion_page_id = await createNotionPage(
-        { apiKey: settings.notion_api_key, databaseId: settings.notion_database_id },
-        { name: term.name, content: term.content, categories: term.categories, priority: term.priority },
-      );
-      const synced = await updateTerm(supabase, term.id, { notion_page_id });
-      return synced ?? term;
+      const credentials = { apiKey: settings.notion_api_key, databaseId: settings.notion_database_id };
+      let notion_page_id: string | undefined;
+      try {
+        notion_page_id = await createNotionPage(credentials, {
+          name: term.name,
+          content: term.content,
+          categories: term.categories,
+          priority: term.priority,
+        });
+        const synced = await updateTerm(supabase, term.id, { notion_page_id });
+        return synced ?? term;
+      } catch (err) {
+        if (notion_page_id) {
+          await archiveNotionPage(credentials, notion_page_id).catch(() => {});
+        }
+        await deleteTerm(supabase, term.id);
+        throw err;
+      }
     }
   }
 
