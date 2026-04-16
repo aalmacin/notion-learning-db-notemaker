@@ -147,6 +147,11 @@ export async function archiveNotionPage(credentials: NotionCredentials, pageId: 
   await client.pages.update({ page_id: pageId, archived: true });
 }
 
+export async function unarchiveNotionPage(credentials: NotionCredentials, pageId: string): Promise<void> {
+  const client = getClient(credentials);
+  await client.pages.update({ page_id: pageId, archived: false });
+}
+
 export async function updateNotionPageContent(credentials: NotionCredentials, pageId: string, content: string): Promise<void> {
   const client = getClient(credentials);
   const response = await client.blocks.children.list({ block_id: pageId, page_size: 1 });

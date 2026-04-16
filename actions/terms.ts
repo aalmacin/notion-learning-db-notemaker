@@ -3,7 +3,7 @@
 import { deleteTerm as dbDeleteTerm, getAllCategories, getTermById, getUserSettings, updateTerm } from '@/lib/db';
 import { explainTermWithAI } from '@/lib/openai';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { archiveNotionPage, updateNotionPageContent, updateNotionPageMetadata } from '@/lib/notion';
+import { archiveNotionPage, unarchiveNotionPage, updateNotionPageContent, updateNotionPageMetadata } from '@/lib/notion';
 import { revalidatePath } from 'next/cache';
 import type { Term, Priority } from '@/lib/db';
 
@@ -18,13 +18,21 @@ async function getNotionCredentials() {
 
 export async function deleteTerm(id: number): Promise<void> {
   const { supabase, credentials } = await getNotionCredentials();
-  if (credentials) {
-    const term = await getTermById(supabase, id);
-    if (term?.notion_page_id) {
-      await archiveNotionPage(credentials, term.notion_page_id);
-    }
+  const notionPageId = credentials ? (await getTermById(supabase, id))?.notion_page_id ?? null : null;
+
+  if (credentials && notionPageId) {
+    await archiveNotionPage(credentials, notionPageId);
   }
-  await dbDeleteTerm(supabase, id);
+
+  try {
+    await dbDeleteTerm(supabase, id);
+  } catch (err) {
+    if (credentials && notionPageId) {
+      await unarchiveNotionPage(credentials, notionPageId).catch(() => {});
+    }
+    throw err;
+  }
+
   revalidatePath('/terms');
 }
 
