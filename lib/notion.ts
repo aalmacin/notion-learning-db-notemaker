@@ -6,8 +6,19 @@ import type {
 
 type NotionCredentials = { apiKey: string; databaseId: string };
 
+// Notion allows ~3 req/s. Enforce 400ms between calls to stay safely under the limit.
+const NOTION_REQUEST_INTERVAL_MS = 400;
+let lastNotionRequestTime = 0;
+
+async function throttleNotion(): Promise<void> {
+  const now = Date.now();
+  const wait = NOTION_REQUEST_INTERVAL_MS - (now - lastNotionRequestTime);
+  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+  lastNotionRequestTime = Date.now();
+}
+
 function getClient(credentials: NotionCredentials) {
-  return new Client({ auth: credentials.apiKey });
+  return new Client({ auth: credentials.apiKey, retry: { maxRetries: 5 } });
 }
 
 export async function createNotionPage(
@@ -20,6 +31,7 @@ export async function createNotionPage(
   },
 ): Promise<string> {
   const client = getClient(credentials);
+  await throttleNotion();
   const response = await client.pages.create({
     parent: { data_source_id: credentials.databaseId },
     properties: {
@@ -103,6 +115,7 @@ export async function appendRefinementToNotionPage(
     year: 'numeric',
   });
 
+  await throttleNotion();
   await client.pages.update({
     page_id: pageId,
     properties: {
@@ -121,6 +134,7 @@ export async function appendRefinementToNotionPage(
       paragraph: { rich_text: parseInlineBold(line) },
     }));
 
+  await throttleNotion();
   await client.blocks.children.append({
     block_id: pageId,
     children: [
@@ -162,7 +176,8 @@ export async function appendRefinementToNotionPage(
 export async function getNotionDatabases(
   apiKey: string,
 ): Promise<{ id: string; title: string }[]> {
-  const client = new Client({ auth: apiKey });
+  const client = new Client({ auth: apiKey, retry: { maxRetries: 5 } });
+  await throttleNotion();
   const response = await client.search({
     filter: { value: 'data_source', property: 'object' },
     page_size: 100,
@@ -178,7 +193,8 @@ export async function getNotionDatabases(
 export async function createNotionDataSource(
   apiKey: string,
 ): Promise<{ id: string; title: string }> {
-  const client = new Client({ auth: apiKey });
+  const client = new Client({ auth: apiKey, retry: { maxRetries: 5 } });
+  await throttleNotion();
   const database = await client.databases.create({
     parent: { type: 'workspace', workspace: true },
     title: [{ type: 'text', text: { content: 'Notemaker Terms' } }],
@@ -203,6 +219,7 @@ export async function createNotionDataSource(
 
   let dataSourceId = 'data_sources' in database ? database.data_sources[0]?.id : undefined;
   if (!dataSourceId) {
+    await throttleNotion();
     const hydrated = await client.databases.retrieve({ database_id: database.id });
     dataSourceId = 'data_sources' in hydrated ? hydrated.data_sources[0]?.id : undefined;
   }
