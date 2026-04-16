@@ -48,7 +48,7 @@ function isValidNotionId(id: string): boolean {
   return NOTION_UUID_RE.test(id.trim());
 }
 
-export async function syncWithNotion(): Promise<{ synced: number; imported: number; stale: string[]; dbError?: string }> {
+export async function syncWithNotion(): Promise<{ synced: number; imported: number; pushed: number; stale: string[]; dbError?: string }> {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -72,8 +72,10 @@ export async function syncWithNotion(): Promise<{ synced: number; imported: numb
 
   const linkedIds = new Set(terms.map((t) => t.notion_page_id).filter(Boolean));
   const linked = terms.filter((t) => t.notion_page_id && isValidNotionId(t.notion_page_id));
+  const unsynced = terms.filter((t) => !t.notion_page_id);
   const notionOnly = notionPages.filter((p) => !linkedIds.has(p.id));
   const stale: string[] = [];
+  let pushed = 0;
 
   await Promise.allSettled([
     // Update existing linked terms
@@ -94,6 +96,12 @@ export async function syncWithNotion(): Promise<{ synced: number; imported: numb
         }
       }
     }),
+    // Push local terms not yet on Notion
+    ...unsynced.map(async (term) => {
+      const pageId = await createNotionPage(credentials, term);
+      await updateTerm(supabase, term.id, { notion_page_id: pageId });
+      pushed++;
+    }),
     // Import Notion pages that have no local DB entry
     ...notionOnly.map(async (page) => {
       const content = await getNotionPageContent(credentials, page.id);
@@ -108,5 +116,5 @@ export async function syncWithNotion(): Promise<{ synced: number; imported: numb
   ]);
 
   revalidatePath('/terms');
-  return { synced: linked.length - stale.length, imported: notionOnly.length, stale, dbError };
+  return { synced: linked.length - stale.length, imported: notionOnly.length, pushed, stale, dbError };
 }
