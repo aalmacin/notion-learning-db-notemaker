@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
 import { Providers } from "@/components/Providers";
 import { signOut } from "@/actions/auth";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -20,11 +21,14 @@ export const metadata: Metadata = {
   description: "Personal note-making app",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
   return (
     <html
       lang="en"
@@ -36,22 +40,24 @@ export default function RootLayout({
             <Link href="/" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50 hover:opacity-80 transition-opacity">
               NoteMaker
             </Link>
-            <nav className="flex items-center gap-4">
-              <Link href="/terms" className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50 transition-colors">
-                Terms
-              </Link>
-              <Link href="/categories" className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50 transition-colors">
-                Categories
-              </Link>
-              <Link href="/settings" className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50 transition-colors">
-                Settings
-              </Link>
-              <form action={signOut}>
-                <button type="submit" className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50 transition-colors">
-                  Sign out
-                </button>
-              </form>
-            </nav>
+            {user && (
+              <nav className="flex items-center gap-4">
+                <Link href="/terms" className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50 transition-colors">
+                  Terms
+                </Link>
+                <Link href="/categories" className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50 transition-colors">
+                  Categories
+                </Link>
+                <Link href="/settings" className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50 transition-colors">
+                  Settings
+                </Link>
+                <form action={signOut}>
+                  <button type="submit" className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50 transition-colors">
+                    Sign out
+                  </button>
+                </form>
+              </nav>
+            )}
           </div>
         </header>
         <Providers>{children}</Providers>

@@ -20,7 +20,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { deleteTerm, updateTermPriority } from '@/actions/terms';
-import { addToNotion } from '@/actions/notion';
+import { addToNotion, syncWithNotion } from '@/actions/notion';
 import { updateTermCategories } from '@/actions/categories';
 import type { Term, Category, Priority } from '@/lib/db';
 
@@ -141,6 +141,9 @@ export function TermsTable({ initialData, initialCategories, initialCategory }: 
   const [notionFilter, setNotionFilter] = useState<'all' | 'pending' | 'added'>('pending');
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<number | null>(null);
   const [deleteSuccess, setDeleteSuccess] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [staleTerms, setStaleTerms] = useState<string[]>([]);
+  const [syncDbError, setSyncDbError] = useState<string | null>(null);
 
   const { data = initialData } = useQuery({
     queryKey: queryKeys.terms.all(),
@@ -189,6 +192,20 @@ export function TermsTable({ initialData, initialCategories, initialCategory }: 
       );
       setNotionSuccessId(term.id);
       setTimeout(() => setNotionSuccessId(null), 3000);
+    },
+  });
+
+  const syncMutation = useMutation({
+    mutationFn: syncWithNotion,
+    onSuccess: ({ synced, imported, pushed, stale, dbError }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.terms.all() });
+      const parts = [`Synced ${synced} term${synced !== 1 ? 's' : ''} with Notion.`];
+      if (pushed > 0) parts.push(`Pushed ${pushed} new term${pushed !== 1 ? 's' : ''} to Notion.`);
+      if (imported > 0) parts.push(`Imported ${imported} new term${imported !== 1 ? 's' : ''} from Notion.`);
+      setSyncMessage(parts.join(' '));
+      setStaleTerms(stale);
+      setSyncDbError(dbError ?? null);
+      setTimeout(() => setSyncMessage(null), 4000);
     },
   });
 
@@ -374,6 +391,23 @@ export function TermsTable({ initialData, initialCategories, initialCategory }: 
       {deleteSuccess && (
         <p className="text-sm text-green-600 dark:text-green-400">Term deleted successfully.</p>
       )}
+      {syncMessage && (
+        <p className="text-sm text-green-600 dark:text-green-400">{syncMessage}</p>
+      )}
+      {staleTerms.length > 0 && (
+        <div className="text-sm text-yellow-600 dark:text-yellow-400">
+          <p className="font-medium">Unlinked {staleTerms.length} stale Notion page{staleTerms.length !== 1 ? 's' : ''}:</p>
+          <ul className="list-disc list-inside mt-1">
+            {staleTerms.map((name) => <li key={name}>{name}</li>)}
+          </ul>
+        </div>
+      )}
+      {syncDbError && (
+        <p className="text-sm text-yellow-600 dark:text-yellow-400">Could not query Notion database: {syncDbError}</p>
+      )}
+      {syncMutation.isError && (
+        <p className="text-sm text-red-600 dark:text-red-400">Sync failed. Please try again.</p>
+      )}
       <div className="flex flex-wrap gap-4 items-start">
         <input
           type="text"
@@ -382,6 +416,13 @@ export function TermsTable({ initialData, initialCategories, initialCategory }: 
           onChange={(e) => setGlobalFilter(e.target.value)}
           className="flex-1 min-w-[200px] px-3 py-2 text-sm border border-zinc-200 rounded-lg bg-white dark:bg-zinc-900 dark:border-zinc-700 text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-300 dark:focus:ring-zinc-600"
         />
+        <button
+          onClick={() => syncMutation.mutate()}
+          disabled={syncMutation.isPending}
+          className="px-3 py-2 text-xs font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {syncMutation.isPending ? 'Syncing…' : 'Sync with Notion'}
+        </button>
         <div className="flex items-center gap-1 border border-zinc-200 dark:border-zinc-700 rounded-lg overflow-hidden">
           {(['pending', 'all', 'added'] as const).map((val) => (
             <button

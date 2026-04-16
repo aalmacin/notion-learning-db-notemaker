@@ -1,8 +1,11 @@
 import { Client } from '@notionhq/client';
 import type {
   BlockObjectRequest,
+  BlockObjectResponse,
   DataSourceObjectResponse,
+  PageObjectResponse,
 } from '@notionhq/client/build/src/api-endpoints';
+import type { Priority } from '@/lib/db';
 
 type NotionCredentials = { apiKey: string; databaseId: string };
 
@@ -82,6 +85,95 @@ function parseMarkdownToNotionBlocks(markdown: string): BlockObjectRequest[] {
         paragraph: { rich_text: parseInlineBold(line) },
       };
     });
+}
+
+export type NotionPageSummary = {
+  id: string;
+  name: string;
+  categories: string[];
+  priority: Priority;
+};
+
+export async function getAllNotionPages(credentials: NotionCredentials): Promise<NotionPageSummary[]> {
+  const client = getClient(credentials);
+  const pages: NotionPageSummary[] = [];
+  let cursor: string | undefined;
+
+  do {
+    const response = await client.dataSources.query({
+      data_source_id: credentials.databaseId,
+      start_cursor: cursor,
+      page_size: 100,
+    });
+
+    for (const result of response.results) {
+      if (!('properties' in result)) continue;
+      const page = result as PageObjectResponse;
+
+      const titleProp = page.properties['Study'];
+      const name =
+        titleProp?.type === 'title' ? titleProp.title.map((t) => t.plain_text).join('') : '';
+      if (!name) continue;
+
+      const categoryProp = page.properties['Category'];
+      const categories =
+        categoryProp?.type === 'multi_select' ? categoryProp.multi_select.map((c) => c.name) : [];
+
+      const priorityProp = page.properties['Priority'];
+      const rawPriority = priorityProp?.type === 'select' ? priorityProp.select?.name : undefined;
+      const priority: Priority =
+        rawPriority === 'High' || rawPriority === 'Low' ? rawPriority : 'Medium';
+
+      pages.push({ id: page.id, name, categories, priority });
+    }
+
+    cursor = response.next_cursor ?? undefined;
+  } while (cursor);
+
+  return pages;
+}
+
+export async function getNotionPageContent(credentials: NotionCredentials, pageId: string): Promise<string> {
+  const client = getClient(credentials);
+  const response = await client.blocks.children.list({ block_id: pageId, page_size: 1 });
+  const first = response.results[0];
+  if (!first || !('type' in first) || first.type !== 'paragraph') return '';
+  const block = first as BlockObjectResponse & { type: 'paragraph' };
+  return block.paragraph.rich_text.map((rt) => rt.plain_text).join('');
+}
+
+export async function archiveNotionPage(credentials: NotionCredentials, pageId: string): Promise<void> {
+  const client = getClient(credentials);
+  await client.pages.update({ page_id: pageId, archived: true });
+}
+
+export async function updateNotionPageContent(credentials: NotionCredentials, pageId: string, content: string): Promise<void> {
+  const client = getClient(credentials);
+  const response = await client.blocks.children.list({ block_id: pageId, page_size: 1 });
+  const first = response.results[0];
+  if (!first || !('type' in first) || first.type !== 'paragraph') return;
+  await client.blocks.update({
+    block_id: first.id,
+    paragraph: { rich_text: [{ type: 'text', text: { content } }] },
+  });
+}
+
+export async function updateNotionPageMetadata(
+  credentials: NotionCredentials,
+  pageId: string,
+  categories: string[],
+  priority: string,
+): Promise<void> {
+  const client = getClient(credentials);
+  const today = new Date().toISOString().split('T')[0];
+  await client.pages.update({
+    page_id: pageId,
+    properties: {
+      Category: { multi_select: categories.map((name) => ({ name })) },
+      Priority: { select: { name: priority } },
+      Date: { date: { start: today } },
+    },
+  });
 }
 
 export async function appendRefinementToNotionPage(

@@ -4,8 +4,10 @@ import {
   insertCategory as dbInsertCategory,
   deleteCategory as dbDeleteCategory,
   updateTermCategories as dbUpdateTermCategories,
+  getUserSettings,
 } from '@/lib/db';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { updateNotionPageMetadata } from '@/lib/notion';
 import { revalidatePath } from 'next/cache';
 import type { Category, Term } from '@/lib/db';
 
@@ -29,6 +31,20 @@ export async function updateTermCategories(termId: number, categories: string[])
   const supabase = await createSupabaseServerClient();
   const updated = await dbUpdateTermCategories(supabase, termId, categories);
   if (!updated) throw new Error('Term not found');
+  if (updated.notion_page_id) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const settings = await getUserSettings(supabase, user.id);
+      if (settings?.notion_api_key && settings?.notion_database_id) {
+        await updateNotionPageMetadata(
+          { apiKey: settings.notion_api_key, databaseId: settings.notion_database_id },
+          updated.notion_page_id,
+          updated.categories,
+          updated.priority,
+        );
+      }
+    }
+  }
   revalidatePath('/terms');
   return updated;
 }
