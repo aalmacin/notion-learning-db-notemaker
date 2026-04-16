@@ -1,6 +1,8 @@
 'use server';
 
 import {
+  getAllCategories,
+  getTermById,
   insertCategory as dbInsertCategory,
   deleteCategory as dbDeleteCategory,
   updateTermCategories as dbUpdateTermCategories,
@@ -10,6 +12,11 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { updateNotionPageMetadata } from '@/lib/notion';
 import { revalidatePath } from 'next/cache';
 import type { Category, Term } from '@/lib/db';
+
+export async function fetchCategories(): Promise<Category[]> {
+  const supabase = await createSupabaseServerClient();
+  return getAllCategories(supabase);
+}
 
 export async function addCategory(name: string): Promise<Category> {
   const trimmed = name.trim();
@@ -29,6 +36,8 @@ export async function removeCategory(id: number): Promise<void> {
 
 export async function updateTermCategories(termId: number, categories: string[]): Promise<Term> {
   const supabase = await createSupabaseServerClient();
+  const current = await getTermById(supabase, termId);
+  if (!current) throw new Error('Term not found');
   const updated = await dbUpdateTermCategories(supabase, termId, categories);
   if (!updated) throw new Error('Term not found');
   if (updated.notion_page_id) {
@@ -36,12 +45,17 @@ export async function updateTermCategories(termId: number, categories: string[])
     if (user) {
       const settings = await getUserSettings(supabase, user.id);
       if (settings?.notion_api_key && settings?.notion_database_id) {
-        await updateNotionPageMetadata(
-          { apiKey: settings.notion_api_key, databaseId: settings.notion_database_id },
-          updated.notion_page_id,
-          updated.categories,
-          updated.priority,
-        );
+        try {
+          await updateNotionPageMetadata(
+            { apiKey: settings.notion_api_key, databaseId: settings.notion_database_id },
+            updated.notion_page_id,
+            updated.categories,
+            updated.priority,
+          );
+        } catch (err) {
+          await dbUpdateTermCategories(supabase, termId, current.categories).catch(() => {});
+          throw err;
+        }
       }
     }
   }

@@ -3,10 +3,21 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useStore } from '@tanstack/react-store'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { termStore, updateTermInStore, removeTermFromStore, dismissTerm, type TermResult, type DoneTermResult } from '@/store/termStore'
-import { regenerateTerm, deleteTerm } from '@/actions/terms'
+import { regenerateTerm, deleteTerm, updateTermPriority } from '@/actions/terms'
 import { addToNotion } from '@/actions/notion'
+import { updateTermCategories, fetchCategories } from '@/actions/categories'
+import { queryKeys } from '@/lib/queryKeys'
+import type { Priority } from '@/lib/db'
+
+const PRIORITIES: Priority[] = ['High', 'Medium', 'Low']
+
+const priorityColors: Record<Priority, string> = {
+  High: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-300 dark:border-red-700',
+  Medium: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700',
+  Low: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700',
+}
 
 function DismissButton({ name }: { name: string }) {
   return (
@@ -57,6 +68,11 @@ function ErrorCard({ name, error }: { name: string; error: string }) {
 function DoneTermCard({ term }: { term: DoneTermResult }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
+  const { data: allCategories = [] } = useQuery({
+    queryKey: queryKeys.categories.all(),
+    queryFn: fetchCategories,
+  })
+
   const regenerateMutation = useMutation({
     mutationFn: () => regenerateTerm(term.id, term.name),
     onSuccess: updateTermInStore,
@@ -72,25 +88,83 @@ function DoneTermCard({ term }: { term: DoneTermResult }) {
     onSuccess: updateTermInStore,
   })
 
-  const anyError = regenerateMutation.error ?? deleteMutation.error ?? notionMutation.error
+  const priorityMutation = useMutation({
+    mutationFn: (priority: Priority) => updateTermPriority(term.id, priority),
+    onSuccess: updateTermInStore,
+  })
+
+  const categoryMutation = useMutation({
+    mutationFn: (categories: string[]) => updateTermCategories(term.id, categories),
+    onSuccess: updateTermInStore,
+  })
+
+  const anyError = regenerateMutation.error ?? deleteMutation.error ?? notionMutation.error ?? priorityMutation.error ?? categoryMutation.error
+
+  function toggleCategory(cat: string) {
+    const next = term.categories.includes(cat)
+      ? term.categories.filter((c) => c !== cat)
+      : [...term.categories, cat]
+    categoryMutation.mutate(next)
+  }
 
   return (
     <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 flex flex-col gap-4">
       <div>
-        <div className="flex items-start">
+        <div className="flex items-start gap-2">
           <h2 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50 flex-1">{term.name}</h2>
+          <div className="flex items-center gap-1.5 mt-1.5 shrink-0">
+            {term.alreadyExisted && (
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                Already in DB
+              </span>
+            )}
+            {term.notion_page_id !== null && (
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                In Notion
+              </span>
+            )}
+          </div>
           <DismissButton name={term.name} />
         </div>
-        {term.categories.length > 0 && (
+
+        <div className="flex flex-wrap gap-2 mt-3">
+          {PRIORITIES.map((p) => (
+            <button
+              key={p}
+              type="button"
+              disabled={priorityMutation.isPending}
+              onClick={() => priorityMutation.mutate(p)}
+              className={`px-3 py-1 rounded-full text-xs font-medium border transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                term.priority === p
+                  ? priorityColors[p]
+                  : 'border-zinc-300 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-500'
+              }`}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+
+        {allCategories.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-2">
-            {term.categories.map((cat: string) => (
-              <span
-                key={cat}
-                className="text-xs font-medium px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
-              >
-                {cat}
-              </span>
-            ))}
+            {allCategories.map((cat) => {
+              const selected = term.categories.includes(cat.name)
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  disabled={categoryMutation.isPending}
+                  onClick={() => toggleCategory(cat.name)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                    selected
+                      ? 'bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 border-zinc-900 dark:border-zinc-50'
+                      : 'border-zinc-300 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-500'
+                  }`}
+                >
+                  {cat.name}
+                </button>
+              )
+            })}
           </div>
         )}
       </div>
