@@ -3,7 +3,7 @@ import type { Term } from '@/lib/db'
 
 export type PendingTermResult = { status: 'processing'; name: string }
 export type ErrorTermResult = { status: 'error'; name: string; error: string }
-export type DoneTermResult = Term & { status: 'done' }
+export type DoneTermResult = Term & { status: 'done'; alreadyExisted?: true }
 export type TermResult = PendingTermResult | ErrorTermResult | DoneTermResult
 
 interface TermState {
@@ -29,7 +29,7 @@ export function addPendingTerms(names: string[]) {
   }))
 }
 
-export function resolveTermResult(pendingName: string, term: Term) {
+export function resolveTermResult(pendingName: string, term: Term & { alreadyExisted?: true }) {
   termStore.setState((state) => ({
     ...state,
     activeTerms: state.activeTerms.map((t) =>

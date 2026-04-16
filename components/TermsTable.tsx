@@ -42,15 +42,17 @@ function CategoryEditor({ term, allCategories, onSaved }: {
   allCategories: Category[];
   onSaved: (updated: Term) => void;
 }) {
-  const [selected, setSelected] = useState<string[]>(term.categories);
-
   const mutation = useMutation({
-    mutationFn: () => updateTermCategories(term.id, selected),
+    mutationFn: (categories: string[]) => updateTermCategories(term.id, categories),
     onSuccess: onSaved,
   });
 
-  const toggle = (name: string) =>
-    setSelected((prev) => prev.includes(name) ? prev.filter((c) => c !== name) : [...prev, name]);
+  const toggle = (name: string) => {
+    const next = term.categories.includes(name)
+      ? term.categories.filter((c) => c !== name)
+      : [...term.categories, name];
+    mutation.mutate(next);
+  };
 
   return (
     <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-700 space-y-3">
@@ -60,9 +62,10 @@ function CategoryEditor({ term, allCategories, onSaved }: {
           <button
             key={cat.id}
             type="button"
+            disabled={mutation.isPending}
             onClick={() => toggle(cat.name)}
-            className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
-              selected.includes(cat.name)
+            className={`px-2.5 py-1 text-xs rounded-full border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              term.categories.includes(cat.name)
                 ? 'bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-50 dark:text-zinc-900 dark:border-zinc-50'
                 : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400 dark:bg-zinc-900 dark:text-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-500'
             }`}
@@ -76,22 +79,13 @@ function CategoryEditor({ term, allCategories, onSaved }: {
           {mutation.error instanceof Error ? mutation.error.message : 'Failed to save'}
         </p>
       )}
-      <button
-        onClick={() => mutation.mutate()}
-        disabled={mutation.isPending}
-        className="px-3 py-1.5 text-xs font-medium rounded-lg bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-      >
-        {mutation.isPending ? 'Saving…' : 'Save categories'}
-      </button>
     </div>
   );
 }
 
 function PriorityEditor({ term, onSaved }: { term: Term; onSaved: (updated: Term) => void }) {
-  const [selected, setSelected] = useState<Priority>(term.priority);
-
   const mutation = useMutation({
-    mutationFn: () => updateTermPriority(term.id, selected),
+    mutationFn: (priority: Priority) => updateTermPriority(term.id, priority),
     onSuccess: onSaved,
   });
 
@@ -100,13 +94,14 @@ function PriorityEditor({ term, onSaved }: { term: Term; onSaved: (updated: Term
       <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Priority</p>
       <div className="flex gap-4">
         {PRIORITIES.map((p) => (
-          <label key={p} className="flex items-center gap-1.5 cursor-pointer">
+          <label key={p} className={`flex items-center gap-1.5 ${mutation.isPending ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
             <input
               type="radio"
               name={`priority-${term.id}`}
               value={p}
-              checked={selected === p}
-              onChange={() => setSelected(p)}
+              checked={term.priority === p}
+              disabled={mutation.isPending}
+              onChange={() => mutation.mutate(p)}
               className="accent-zinc-900 dark:accent-zinc-50"
             />
             <span className="text-xs text-zinc-700 dark:text-zinc-300">{p}</span>
@@ -118,13 +113,6 @@ function PriorityEditor({ term, onSaved }: { term: Term; onSaved: (updated: Term
           {mutation.error instanceof Error ? mutation.error.message : 'Failed to save'}
         </p>
       )}
-      <button
-        onClick={() => mutation.mutate()}
-        disabled={mutation.isPending}
-        className="px-3 py-1.5 text-xs font-medium rounded-lg bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-      >
-        {mutation.isPending ? 'Saving…' : 'Save priority'}
-      </button>
     </div>
   );
 }
