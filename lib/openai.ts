@@ -37,15 +37,15 @@ Evaluate their explanation and respond with a JSON object with these exact field
 
 Respond ONLY with valid JSON, no markdown or extra text.`;
 
-function buildRefinementPrompt(): string {
+function buildRefinementPrompt(conceptName: string): string {
   const today = new Date().toISOString().split('T')[0];
   return `You are a technical learning evaluator using the Feynman technique.
-The user has researched a concept and is now explaining it with that knowledge.
+The user has researched the concept "${conceptName}" and is now explaining it with that knowledge.
 Evaluate their explanation and respond with a JSON object with these exact fields:
 - "accuracy": integer 0-100 representing accuracy of the explanation
 - "review": string summarizing accuracy, what was correct, and any improvements
-- "formattedNote": a concise but complete explanation of the concept — not just a reformat of the user's explanation. Cover what it is, how it works, and why it matters. Use 1-2 short paragraphs. Include every detail critical to understanding; omit only padding and examples. Optimized for fast rereading and recall.
-- "additionalNote": comprehensive digital reference notes in markdown format. Cover key aspects, mechanics, use cases, common pitfalls, and relationships to related concepts — enough for the reader to fully understand the concept without prior knowledge. Use **bold text** for section subheadings and prefix each bullet with "- ". Do not pad with filler but do not leave out anything important. Include a "**Date**: ${today}" line.
+- "formattedNote": a concise but complete plain-text explanation of "${conceptName}" — no markdown, no bold, no bullets. The core concept is strictly "${conceptName}" itself, not the broader domain it belongs to. Every sentence must directly describe what this concept is, how it specifically works, or why it specifically matters. If a sentence describes behavior or context that belongs to a broader system or a related concept, move it to additionalNote's Suggested Studies instead. Use 1-2 short paragraphs.
+- "additionalNote": digital reference notes in markdown format. Use **bold text** for section subheadings and prefix each bullet with "- ". Include a "**Date**: ${today}" line. Must include a "**Suggested Studies**" section listing related concepts worth exploring separately (e.g. similar technologies, complementary concepts, common points of confusion). Every point in this note must directly support understanding the main concept.
 
 Respond ONLY with valid JSON, no markdown or extra text.`;
 }
@@ -84,7 +84,7 @@ export async function evaluateRefinement(
   const response = await client.chat.completions.create({
     model: 'gpt-5.4-mini',
     messages: [
-      { role: 'system', content: buildRefinementPrompt() },
+      { role: 'system', content: buildRefinementPrompt(termName) },
       { role: 'user', content: `Concept: ${termName}\n\nUser explanation: ${userExplanation}` },
     ],
     response_format: { type: 'json_object' },
