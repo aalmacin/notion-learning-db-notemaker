@@ -44,8 +44,8 @@ The user has researched a concept and is now explaining it with that knowledge.
 Evaluate their explanation and respond with a JSON object with these exact fields:
 - "accuracy": integer 0-100 representing accuracy of the explanation
 - "review": string summarizing accuracy, what was correct, and any improvements
-- "formattedNote": a compact physical notebook note — 1 short paragraph (2 max if absolutely required), precise definitions, no fluff, no long examples, optimized for fast rereading and recall
-- "additionalNote": detailed digital reference notes in markdown format. Use **bold text** for section subheadings and prefix each bullet with "- ". Include a "**Date**: ${today}" line.
+- "formattedNote": a concise but complete explanation of the concept — not just a reformat of the user's explanation. Cover what it is, how it works, and why it matters. Use 1-2 short paragraphs. Include every detail critical to understanding; omit only padding and examples. Optimized for fast rereading and recall.
+- "additionalNote": comprehensive digital reference notes in markdown format. Cover key aspects, mechanics, use cases, common pitfalls, and relationships to related concepts — enough for the reader to fully understand the concept without prior knowledge. Use **bold text** for section subheadings and prefix each bullet with "- ". Do not pad with filler but do not leave out anything important. Include a "**Date**: ${today}" line.
 
 Respond ONLY with valid JSON, no markdown or extra text.`;
 }
@@ -55,7 +55,7 @@ export async function evaluatePreRefinement(
   userExplanation: string,
 ): Promise<PreRefinementEvaluation> {
   const response = await client.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'gpt-5.4-mini',
     messages: [
       { role: 'system', content: PRE_REFINEMENT_PROMPT },
       { role: 'user', content: `Concept: ${termName}\n\nUser explanation: ${userExplanation}` },
@@ -82,7 +82,7 @@ export async function evaluateRefinement(
   userExplanation: string,
 ): Promise<RefinementEvaluation> {
   const response = await client.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'gpt-5.4-mini',
     messages: [
       { role: 'system', content: buildRefinementPrompt() },
       { role: 'user', content: `Concept: ${termName}\n\nUser explanation: ${userExplanation}` },
@@ -127,7 +127,7 @@ export async function evaluateRefinement(
 export async function explainTermWithAI(term: string, allowedCategories: string[], context?: string): Promise<TermExplanation> {
   const userContent = context ? `Term: ${term}\nContext: ${context}` : term;
   const response = await client.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'gpt-5.4-mini',
     messages: [
       { role: 'system', content: buildSystemPrompt(allowedCategories) },
       { role: 'user', content: userContent },
