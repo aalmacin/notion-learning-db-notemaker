@@ -37,15 +37,15 @@ Evaluate their explanation and respond with a JSON object with these exact field
 
 Respond ONLY with valid JSON, no markdown or extra text.`;
 
-function buildRefinementPrompt(): string {
+function buildRefinementPrompt(conceptName: string): string {
   const today = new Date().toISOString().split('T')[0];
   return `You are a technical learning evaluator using the Feynman technique.
-The user has researched a concept and is now explaining it with that knowledge.
+The user has researched the concept "${conceptName}" and is now explaining it with that knowledge.
 Evaluate their explanation and respond with a JSON object with these exact fields:
 - "accuracy": integer 0-100 representing accuracy of the explanation
 - "review": string summarizing accuracy, what was correct, and any improvements
-- "formattedNote": a compact physical notebook note — 1 short paragraph (2 max if absolutely required), precise definitions, no fluff, no long examples, optimized for fast rereading and recall
-- "additionalNote": detailed digital reference notes in markdown format. Use **bold text** for section subheadings and prefix each bullet with "- ". Include a "**Date**: ${today}" line.
+- "formattedNote": a concise but complete plain-text explanation of "${conceptName}" — no markdown, no bold, no bullets. The core concept is strictly "${conceptName}" itself, not the broader domain it belongs to. Every sentence must directly describe what this concept is, how it specifically works, or why it specifically matters. If a sentence describes behavior or context that belongs to a broader system or a related concept, move it to additionalNote's Suggested Studies instead. Use 1-2 short paragraphs.
+- "additionalNote": digital reference notes in markdown format. Use **bold text** for section subheadings and prefix each bullet with "- ". Include a "**Date**: ${today}" line. Must include a "**Suggested Studies**" section listing related concepts worth exploring separately (e.g. similar technologies, complementary concepts, common points of confusion). Every point in this note must directly support understanding the main concept.
 
 Respond ONLY with valid JSON, no markdown or extra text.`;
 }
@@ -55,7 +55,7 @@ export async function evaluatePreRefinement(
   userExplanation: string,
 ): Promise<PreRefinementEvaluation> {
   const response = await client.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'gpt-5.4-mini',
     messages: [
       { role: 'system', content: PRE_REFINEMENT_PROMPT },
       { role: 'user', content: `Concept: ${termName}\n\nUser explanation: ${userExplanation}` },
@@ -82,9 +82,9 @@ export async function evaluateRefinement(
   userExplanation: string,
 ): Promise<RefinementEvaluation> {
   const response = await client.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'gpt-5.4-mini',
     messages: [
-      { role: 'system', content: buildRefinementPrompt() },
+      { role: 'system', content: buildRefinementPrompt(termName) },
       { role: 'user', content: `Concept: ${termName}\n\nUser explanation: ${userExplanation}` },
     ],
     response_format: { type: 'json_object' },
@@ -127,7 +127,7 @@ export async function evaluateRefinement(
 export async function explainTermWithAI(term: string, allowedCategories: string[], context?: string): Promise<TermExplanation> {
   const userContent = context ? `Term: ${term}\nContext: ${context}` : term;
   const response = await client.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'gpt-5.4-mini',
     messages: [
       { role: 'system', content: buildSystemPrompt(allowedCategories) },
       { role: 'user', content: userContent },
