@@ -1,6 +1,7 @@
 import { getNotionSettings } from '@/actions/settings';
 import { getNotionDatabases } from '@/lib/notion';
 import { NotionConnect } from '@/components/NotionConnect';
+import { TimezoneSelect } from '@/components/TimezoneSelect';
 
 export default async function SettingsPage({
   searchParams,
@@ -33,6 +34,13 @@ export default async function SettingsPage({
             </p>
           </div>
         )}
+        <section className="mb-8">
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50 mb-1">Timezone</h2>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+            Used for date fields when saving to Notion and displaying dates.
+          </p>
+          <TimezoneSelect currentTimezone={settings?.timezone ?? 'UTC'} />
+        </section>
         <section>
           <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50 mb-4">Notion</h2>
           <NotionConnect

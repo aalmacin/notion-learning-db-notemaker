@@ -6,6 +6,7 @@ import {
   getUserSettings,
   updateNotionDatabaseId,
   clearNotionCredentials,
+  updateTimezone,
   type UserSettings,
 } from '@/lib/db';
 import { createNotionDataSource as createNotionDataSourceInNotion } from '@/lib/notion';
@@ -36,6 +37,16 @@ export async function disconnectNotion(): Promise<void> {
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
   await clearNotionCredentials(supabase, user.id);
+  revalidatePath('/settings');
+}
+
+export async function saveTimezone(timezone: string): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+  await updateTimezone(supabase, user.id, timezone);
   revalidatePath('/settings');
 }
 
