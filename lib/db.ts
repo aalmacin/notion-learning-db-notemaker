@@ -6,6 +6,7 @@ export type UserSettings = {
   user_id: string;
   notion_api_key: string | null;
   notion_database_id: string | null;
+  timezone: string;
   updated_at: string;
 };
 
@@ -385,6 +386,17 @@ export async function updateNotionDatabaseId(
     .from('user_settings')
     .update({ notion_database_id: databaseId, updated_at: new Date().toISOString() })
     .eq('user_id', userId);
+  if (error) throw error;
+}
+
+export async function updateTimezone(
+  supabase: SupabaseClient,
+  userId: string,
+  timezone: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('user_settings')
+    .upsert({ user_id: userId, timezone, updated_at: new Date().toISOString() });
   if (error) throw error;
 }
 

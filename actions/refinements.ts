@@ -100,6 +100,7 @@ export async function addRefinementToNotion(termId: number, refinementId: number
       refinement_additional_note: refinement.refinement_additional_note,
     },
     term.name,
+    settings.timezone,
   );
 
   revalidatePath(`/terms/${termId}`);

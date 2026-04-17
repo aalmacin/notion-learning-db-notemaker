@@ -175,20 +175,25 @@ export async function updateNotionPageContent(credentials: NotionCredentials, pa
   });
 }
 
+function localeDateStr(timezone: string): string {
+  // 'en-CA' locale formats as YYYY-MM-DD which Notion expects
+  return new Date().toLocaleDateString('en-CA', { timeZone: timezone });
+}
+
 export async function updateNotionPageMetadata(
   credentials: NotionCredentials,
   pageId: string,
   categories: string[],
   priority: string,
+  timezone = 'UTC',
 ): Promise<void> {
   const client = getClient(credentials);
-  const today = new Date().toISOString().split('T')[0];
   await client.pages.update({
     page_id: pageId,
     properties: {
       Category: { multi_select: categories.map((name) => ({ name })) },
       Priority: { select: { name: priority } },
-      Date: { date: { start: today } },
+      Date: { date: { start: localeDateStr(timezone) } },
     },
   });
 }
@@ -202,11 +207,11 @@ export async function appendRefinementToNotionPage(
     refinement_additional_note: string;
   },
   termName: string,
+  timezone = 'UTC',
 ): Promise<void> {
   const client = getClient(credentials);
-  const today = new Date();
-  const dateStr = today.toISOString().split('T')[0];
-  const formattedDate = today.toLocaleDateString('en-US', {
+  const dateStr = localeDateStr(timezone);
+  const formattedDate = new Date(`${dateStr}T12:00:00`).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',

@@ -36,7 +36,7 @@ export default async function TermsPage({
           </div>
         )}
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50 mb-6">Terms</h1>
-        <TermsTable initialData={terms} initialCategories={categories} initialCategory={initialCategory} />
+        <TermsTable initialData={terms} initialCategories={categories} initialCategory={initialCategory} timezone={settings?.timezone ?? 'UTC'} />
       </div>
     </div>
   );

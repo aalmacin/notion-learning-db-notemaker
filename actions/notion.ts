@@ -61,6 +61,7 @@ export async function syncWithNotion(): Promise<{ synced: number; imported: numb
   }
 
   const credentials = { apiKey: settings.notion_api_key, databaseId: settings.notion_database_id };
+  const timezone = settings.timezone;
 
   const [terms, notionPagesResult] = await Promise.all([
     getAllTerms(supabase),
@@ -84,7 +85,7 @@ export async function syncWithNotion(): Promise<{ synced: number; imported: numb
       try {
         const [notionContent] = await Promise.all([
           getNotionPageContent(credentials, pageId),
-          updateNotionPageMetadata(credentials, pageId, term.categories, term.priority),
+          updateNotionPageMetadata(credentials, pageId, term.categories, term.priority, timezone),
         ]);
         if (notionContent && notionContent !== term.content) {
           await updateTerm(supabase, term.id, { content: notionContent });

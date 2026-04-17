@@ -197,7 +197,7 @@ function CategoryFilterDropdown({ categories, selected, onChange }: {
   );
 }
 
-export function TermsTable({ initialData, initialCategories, initialCategory }: { initialData: Term[]; initialCategories: Category[]; initialCategory?: string }) {
+export function TermsTable({ initialData, initialCategories, initialCategory, timezone = 'UTC' }: { initialData: Term[]; initialCategories: Category[]; initialCategory?: string; timezone?: string }) {
   const queryClient = useQueryClient();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
@@ -325,6 +325,7 @@ export function TermsTable({ initialData, initialCategories, initialCategory }: 
             year: 'numeric',
             month: 'short',
             day: 'numeric',
+            timeZone: timezone,
           }),
       }),
       columnHelper.accessor('priority', {
@@ -421,7 +422,7 @@ export function TermsTable({ initialData, initialCategories, initialCategory }: 
         },
       }),
     ],
-    [deleteMutation, addToNotionMutation, notionSuccessId, confirmingDeleteId, setConfirmingDeleteId]
+    [deleteMutation, addToNotionMutation, notionSuccessId, confirmingDeleteId, setConfirmingDeleteId, timezone]
   );
 
   const table = useReactTable({

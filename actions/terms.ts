@@ -10,10 +10,10 @@ import type { Term, Priority } from '@/lib/db';
 async function getNotionCredentials() {
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { supabase, credentials: null };
+  if (!user) return { supabase, credentials: null, timezone: 'UTC' };
   const settings = await getUserSettings(supabase, user.id);
-  if (!settings?.notion_api_key || !settings?.notion_database_id) return { supabase, credentials: null };
-  return { supabase, credentials: { apiKey: settings.notion_api_key, databaseId: settings.notion_database_id } };
+  if (!settings?.notion_api_key || !settings?.notion_database_id) return { supabase, credentials: null, timezone: settings?.timezone ?? 'UTC' };
+  return { supabase, credentials: { apiKey: settings.notion_api_key, databaseId: settings.notion_database_id }, timezone: settings.timezone };
 }
 
 export async function deleteTerm(id: number): Promise<void> {
@@ -37,14 +37,14 @@ export async function deleteTerm(id: number): Promise<void> {
 }
 
 export async function updateTermPriority(id: number, priority: Priority): Promise<Term> {
-  const { supabase, credentials } = await getNotionCredentials();
+  const { supabase, credentials, timezone } = await getNotionCredentials();
   const current = await getTermById(supabase, id);
   if (!current) throw new Error('Term not found');
   const updated = await updateTerm(supabase, id, { priority });
   if (!updated) throw new Error('Term not found');
   if (updated.notion_page_id && credentials) {
     try {
-      await updateNotionPageMetadata(credentials, updated.notion_page_id, updated.categories, updated.priority);
+      await updateNotionPageMetadata(credentials, updated.notion_page_id, updated.categories, updated.priority, timezone);
     } catch (err) {
       await updateTerm(supabase, id, { priority: current.priority }).catch(() => {});
       throw err;
@@ -55,7 +55,7 @@ export async function updateTermPriority(id: number, priority: Priority): Promis
 }
 
 export async function regenerateTerm(id: number, name: string, context?: string): Promise<Term> {
-  const { supabase, credentials } = await getNotionCredentials();
+  const { supabase, credentials, timezone } = await getNotionCredentials();
   const dbCategories = await getAllCategories(supabase);
   const categoryNames = dbCategories.map((c) => c.name);
   const explanation = await explainTermWithAI(name, categoryNames, context);
@@ -69,7 +69,7 @@ export async function regenerateTerm(id: number, name: string, context?: string)
   if (updated.notion_page_id && credentials) {
     await Promise.all([
       updateNotionPageContent(credentials, updated.notion_page_id, updated.content),
-      updateNotionPageMetadata(credentials, updated.notion_page_id, updated.categories, updated.priority),
+      updateNotionPageMetadata(credentials, updated.notion_page_id, updated.categories, updated.priority, timezone),
     ]);
   }
 
