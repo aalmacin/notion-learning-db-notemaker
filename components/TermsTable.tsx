@@ -267,11 +267,13 @@ export function TermsTable({ initialData, initialCategories, initialCategory, ti
 
   const syncMutation = useMutation({
     mutationFn: syncWithNotion,
-    onSuccess: ({ synced, imported, pushed, stale, dbError }) => {
+    onSuccess: ({ synced, imported, pushed, contentSynced, skipped, stale, dbError }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.terms.all() });
       const parts = [`Synced ${synced} term${synced !== 1 ? 's' : ''} with Notion.`];
       if (pushed > 0) parts.push(`Pushed ${pushed} new term${pushed !== 1 ? 's' : ''} to Notion.`);
       if (imported > 0) parts.push(`Imported ${imported} new term${imported !== 1 ? 's' : ''} from Notion.`);
+      if (contentSynced > 0) parts.push(`Downloaded ${contentSynced} explained concept${contentSynced !== 1 ? 's' : ''}.`);
+      if (skipped > 0) parts.push(`Skipped ${skipped} unchanged.`);
       setSyncMessage(parts.join(' '));
       setStaleTerms(stale);
       setSyncDbError(dbError ?? null);

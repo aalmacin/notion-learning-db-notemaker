@@ -16,9 +16,14 @@ export type Term = {
   content: string;
   categories: string[];
   created_at: string;
+  updated_at: string;
   notion_page_id: string | null;
+  notion_last_edited: string | null;
+  last_synced_at: string | null;
   priority: Priority;
   explained: boolean;
+  daily_learning_done: boolean;
+  notion_date: string | null;
 };
 
 export type Category = {
@@ -153,7 +158,7 @@ export async function getAllTerms(supabase: SupabaseClient): Promise<Term[]> {
 
 export async function insertTerm(
   supabase: SupabaseClient,
-  term: Omit<Term, 'id' | 'created_at' | 'explained'>,
+  term: Omit<Term, 'id' | 'created_at' | 'updated_at' | 'notion_last_edited' | 'last_synced_at' | 'explained' | 'daily_learning_done' | 'notion_date'>,
 ): Promise<Term> {
   const { data, error } = await supabase
     .from('terms')
@@ -175,7 +180,7 @@ export async function insertTerm(
 export async function updateTerm(
   supabase: SupabaseClient,
   id: number,
-  updates: Partial<Omit<Term, 'id' | 'created_at' | 'explained'>>,
+  updates: Partial<Omit<Term, 'id' | 'created_at' | 'updated_at' | 'notion_last_edited' | 'last_synced_at' | 'explained' | 'daily_learning_done' | 'notion_date'>>,
 ): Promise<Term | null> {
   const fields: Partial<TermRow> = {};
   if (updates.name !== undefined) fields.name = updates.name;
@@ -409,4 +414,148 @@ export async function clearNotionCredentials(
     .update({ notion_api_key: null, notion_database_id: null, updated_at: new Date().toISOString() })
     .eq('user_id', userId);
   if (error) throw error;
+}
+
+export async function markTermSynced(
+  supabase: SupabaseClient,
+  termId: number,
+  notionLastEdited: string,
+  dailyLearningDone: boolean,
+  notionDate: string | null,
+): Promise<void> {
+  const { error } = await supabase
+    .from('terms')
+    .update({
+      notion_last_edited: notionLastEdited,
+      last_synced_at: new Date().toISOString(),
+      daily_learning_done: dailyLearningDone,
+      notion_date: notionDate,
+    })
+    .eq('id', termId);
+  if (error) throw error;
+}
+
+export type ReviewItem = {
+  term_id: number;
+  term_name: string;
+  notion_date: string;
+  notion_content: string | null;
+  categories: string[];
+};
+
+export async function getExplainedContent(
+  supabase: SupabaseClient,
+  termIds: number[],
+): Promise<{ term_id: number; id: number; explained_at: string; notion_last_edited: string | null }[]> {
+  if (termIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('term_explained_content')
+    .select('id, term_id, explained_at, notion_last_edited')
+    .in('term_id', termIds);
+  if (error) throw error;
+  return data as { term_id: number; id: number; explained_at: string; notion_last_edited: string | null }[];
+}
+
+export async function updateExplainedContent(
+  supabase: SupabaseClient,
+  id: number,
+  notionContent: string,
+  explainedAt: string,
+  notionLastEdited: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('term_explained_content')
+    .update({ notion_content: notionContent, explained_at: explainedAt, notion_last_edited: notionLastEdited })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export async function insertExplainedContent(
+  supabase: SupabaseClient,
+  termId: number,
+  notionContent: string,
+  explainedAt: string,
+  notionLastEdited: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('term_explained_content')
+    .insert({ term_id: termId, notion_content: notionContent, explained_at: explainedAt, notion_last_edited: notionLastEdited });
+  if (error) throw error;
+}
+
+export async function getReviewItemsByMonth(
+  supabase: SupabaseClient,
+  year: number,
+  month: number,
+): Promise<ReviewItem[]> {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const startDate = `${year}-${pad(month)}-01`;
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  const endDate = `${nextYear}-${pad(nextMonth)}-01`;
+
+  const { data, error } = await supabase
+    .from('terms')
+    .select('id, name, notion_date, term_explained_content(notion_content)')
+    .eq('daily_learning_done', true)
+    .not('notion_date', 'is', null)
+    .gte('notion_date', startDate)
+    .lt('notion_date', endDate)
+    .order('notion_date', { ascending: true });
+  if (error) throw error;
+
+  const rows = data as unknown as {
+    id: number;
+    name: string;
+    notion_date: string;
+    term_explained_content: { notion_content: string }[] | null;
+  }[];
+
+  const termIds = rows.map((r) => r.id);
+  const { data: catLinks, error: catError } = await supabase
+    .from('term_categories')
+    .select('term_id, categories(name)')
+    .in('term_id', termIds);
+  if (catError) throw catError;
+
+  const catMap = new Map<number, string[]>();
+  for (const link of catLinks as unknown as { term_id: number; categories: { name: string } | null }[]) {
+    if (!link.categories) continue;
+    if (!catMap.has(link.term_id)) catMap.set(link.term_id, []);
+    catMap.get(link.term_id)!.push(link.categories.name);
+  }
+
+  return rows.map((row) => ({
+    term_id: row.id,
+    term_name: row.name,
+    notion_date: row.notion_date,
+    notion_content: row.term_explained_content?.[0]?.notion_content ?? null,
+    categories: catMap.get(row.id) ?? [],
+  }));
+}
+
+export async function getAvailableReviewMonths(
+  supabase: SupabaseClient,
+): Promise<{ year: number; month: number }[]> {
+  const { data, error } = await supabase
+    .from('terms')
+    .select('notion_date')
+    .eq('daily_learning_done', true)
+    .not('notion_date', 'is', null)
+    .order('notion_date', { ascending: false });
+  if (error) throw error;
+
+  const seen = new Set<string>();
+  const months: { year: number; month: number }[] = [];
+  for (const row of data as { notion_date: string }[]) {
+    const [yearStr, monthStr] = row.notion_date.split('-');
+    const year = Number(yearStr);
+    const month = Number(monthStr);
+    const key = `${year}-${month}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      months.push({ year, month });
+    }
+  }
+  return months;
 }
