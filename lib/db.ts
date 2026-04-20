@@ -355,6 +355,58 @@ export async function deleteConceptRefinement(
   if (error) throw error;
 }
 
+export type ChatMessage = {
+  id: number;
+  refinement_id: number;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
+};
+
+export async function getChatsByRefinementId(
+  supabase: SupabaseClient,
+  refinementId: number,
+): Promise<ChatMessage[]> {
+  const { data, error } = await supabase
+    .from('research_chats')
+    .select('*')
+    .eq('refinement_id', refinementId)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return data as ChatMessage[];
+}
+
+export async function getChatsByRefinementIds(
+  supabase: SupabaseClient,
+  refinementIds: number[],
+): Promise<Record<number, ChatMessage[]>> {
+  if (refinementIds.length === 0) return {};
+  const { data, error } = await supabase
+    .from('research_chats')
+    .select('*')
+    .in('refinement_id', refinementIds)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  const result: Record<number, ChatMessage[]> = {};
+  for (const row of data as ChatMessage[]) {
+    if (!result[row.refinement_id]) result[row.refinement_id] = [];
+    result[row.refinement_id].push(row);
+  }
+  return result;
+}
+
+export async function insertChatMessages(
+  supabase: SupabaseClient,
+  messages: Array<{ refinement_id: number; role: 'user' | 'assistant'; content: string }>,
+): Promise<ChatMessage[]> {
+  const { data, error } = await supabase
+    .from('research_chats')
+    .insert(messages)
+    .select();
+  if (error) throw error;
+  return data as ChatMessage[];
+}
+
 export async function getUserSettings(
   supabase: SupabaseClient,
   userId: string,

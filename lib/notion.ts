@@ -5,7 +5,7 @@ import type {
   DataSourceObjectResponse,
   PageObjectResponse,
 } from '@notionhq/client/build/src/api-endpoints';
-import type { Priority } from '@/lib/db';
+import type { ChatMessage, Priority } from '@/lib/db';
 
 type NotionCredentials = { apiKey: string; databaseId: string };
 
@@ -215,6 +215,7 @@ export async function appendRefinementToNotionPage(
   },
   termName: string,
   timezone = 'UTC',
+  chats: ChatMessage[] = [],
 ): Promise<void> {
   const client = getClient(credentials);
   const dateStr = localeDateStr(timezone);
@@ -278,6 +279,32 @@ export async function appendRefinementToNotionPage(
         },
       },
       ...parseMarkdownToNotionBlocks(refinement.refinement_additional_note),
+      ...(chats.length > 0
+        ? [
+            {
+              object: 'block',
+              type: 'heading_2',
+              heading_2: {
+                rich_text: [{ type: 'text', text: { content: 'Research Q&A' } }],
+                is_toggleable: true,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                children: chats.map((msg) => ({
+                  object: 'block',
+                  type: 'paragraph',
+                  paragraph: {
+                    rich_text: [
+                      {
+                        type: 'text',
+                        text: { content: `${msg.role === 'user' ? 'Q' : 'A'}: ${msg.content}` },
+                        ...(msg.role === 'user' ? { annotations: { bold: true } } : {}),
+                      },
+                    ],
+                  },
+                })),
+              },
+            } as unknown as BlockObjectRequest,
+          ]
+        : []),
     ],
   });
 }
