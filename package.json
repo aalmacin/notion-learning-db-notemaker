@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 5023",
+    "dev": "next dev --webpack -p 5023",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
@@ -17,7 +17,7 @@
     "@tanstack/react-query": "^5.96.1",
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/store": "^0.9.3",
-    "next": "16.2.2",
+    "next": "^16.2.4",
     "openai": "^6.33.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",

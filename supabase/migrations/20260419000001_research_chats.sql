@@ -1,4 +1,4 @@
-CREATE TABLE research_chats (
+CREATE TABLE IF NOT EXISTS research_chats (
   id SERIAL PRIMARY KEY,
   refinement_id INTEGER NOT NULL REFERENCES concept_refinements(id) ON DELETE CASCADE,
   role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
