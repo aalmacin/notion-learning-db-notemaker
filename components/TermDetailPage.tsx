@@ -368,13 +368,15 @@ export function TermDetailPage({ term, initialRefinements, initialChats }: Props
                 </div>
               )}
 
-              {/* Step 2 — Research prompt with chat (only shown when step 1 done but not step 3) */}
-              {viewing.pre_refinement && viewing.pre_refinement_accuracy !== null && !isComplete(viewing) && (
+              {/* Step 2 — Research chat (always available after step 1) */}
+              {viewing.pre_refinement && viewing.pre_refinement_accuracy !== null && (
                 <div className="space-y-3">
                   <StepLabel n={2} label="Research" />
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Do your research now, then come back to explain the concept again. Ask questions below as you study.
-                  </p>
+                  {!isComplete(viewing) && (
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      Do your research now, then come back to explain the concept again. Ask questions below as you study.
+                    </p>
+                  )}
                   {/* Chat messages */}
                   {(allChats[viewing.id] ?? []).length > 0 && (
                     <div className="space-y-2 max-h-80 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-700 p-3">
@@ -421,31 +423,6 @@ export function TermDetailPage({ term, initialRefinements, initialChats }: Props
                     >
                       Ask
                     </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Step 2 — Research chat read-only (completed attempts) */}
-              {viewing.pre_refinement && viewing.pre_refinement_accuracy !== null && isComplete(viewing) && (allChats[viewing.id] ?? []).length > 0 && (
-                <div className="space-y-2">
-                  <StepLabel n={2} label="Research" />
-                  <div className="space-y-2 max-h-60 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-700 p-3">
-                    {(allChats[viewing.id] ?? []).map((msg) => (
-                      <div
-                        key={msg.id}
-                        className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                      >
-                        <p
-                          className={`max-w-[85%] rounded-lg px-3 py-2 text-xs leading-5 ${
-                            msg.role === 'user'
-                              ? 'bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900'
-                              : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
-                          }`}
-                        >
-                          {msg.content}
-                        </p>
-                      </div>
-                    ))}
                   </div>
                 </div>
               )}
