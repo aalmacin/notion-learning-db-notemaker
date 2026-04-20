@@ -51,7 +51,6 @@ export async function updateTermCategories(termId: number, categories: string[])
             updated.notion_page_id,
             updated.categories,
             updated.priority,
-            settings.timezone,
           );
         } catch (err) {
           await dbUpdateTermCategories(supabase, termId, current.categories).catch(() => {});

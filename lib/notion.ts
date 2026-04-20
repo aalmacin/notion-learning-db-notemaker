@@ -104,6 +104,9 @@ export type NotionPageSummary = {
   name: string;
   categories: string[];
   priority: Priority;
+  dailyLearningDone: boolean;
+  date: string | null;
+  lastEditedTime: string;
 };
 
 export async function getAllNotionPages(credentials: NotionCredentials): Promise<NotionPageSummary[]> {
@@ -136,7 +139,13 @@ export async function getAllNotionPages(credentials: NotionCredentials): Promise
       const priority: Priority =
         rawPriority === 'High' || rawPriority === 'Low' ? rawPriority : 'Medium';
 
-      pages.push({ id: page.id, name, categories, priority });
+      const checkboxProp = page.properties['Daily Learning Done'];
+      const dailyLearningDone = checkboxProp?.type === 'checkbox' ? checkboxProp.checkbox : false;
+
+      const dateProp = page.properties['Date'];
+      const date = dateProp?.type === 'date' ? dateProp.date?.start ?? null : null;
+
+      pages.push({ id: page.id, name, categories, priority, dailyLearningDone, date, lastEditedTime: page.last_edited_time });
     }
 
     cursor = response.next_cursor ?? undefined;
@@ -185,7 +194,6 @@ export async function updateNotionPageMetadata(
   pageId: string,
   categories: string[],
   priority: string,
-  timezone = 'UTC',
 ): Promise<void> {
   const client = getClient(credentials);
   await client.pages.update({
@@ -193,7 +201,6 @@ export async function updateNotionPageMetadata(
     properties: {
       Category: { multi_select: categories.map((name) => ({ name })) },
       Priority: { select: { name: priority } },
-      Date: { date: { start: localeDateStr(timezone) } },
     },
   });
 }
@@ -273,6 +280,106 @@ export async function appendRefinementToNotionPage(
       ...parseMarkdownToNotionBlocks(refinement.refinement_additional_note),
     ],
   });
+}
+
+type RichTextEntry = {
+  plain_text: string;
+  annotations?: {
+    bold?: boolean;
+    italic?: boolean;
+    strikethrough?: boolean;
+    underline?: boolean;
+    code?: boolean;
+  };
+};
+
+function richTextToMarkdown(richText: RichTextEntry[]): string {
+  return richText
+    .map((rt) => {
+      let text = rt.plain_text;
+      if (!rt.annotations) return text;
+      if (rt.annotations.code) text = `\`${text}\``;
+      if (rt.annotations.bold) text = `**${text}**`;
+      if (rt.annotations.italic) text = `*${text}*`;
+      if (rt.annotations.strikethrough) text = `~~${text}~~`;
+      return text;
+    })
+    .join('');
+}
+
+function blockToMarkdown(block: BlockObjectResponse): string | null {
+  const b = block as unknown as Record<string, { rich_text?: RichTextEntry[] }>;
+  const section = b[block.type];
+  if (!section?.rich_text) return null;
+
+  const text = richTextToMarkdown(section.rich_text);
+  switch (block.type) {
+    case 'heading_1':
+      return `# ${text}`;
+    case 'heading_2':
+      return `## ${text}`;
+    case 'heading_3':
+      return `### ${text}`;
+    case 'bulleted_list_item':
+      return `- ${text}`;
+    case 'numbered_list_item':
+      return `1. ${text}`;
+    case 'quote':
+      return `> ${text}`;
+    case 'to_do': {
+      const todo = b[block.type] as unknown as { rich_text: RichTextEntry[]; checked?: boolean };
+      return `- [${todo.checked ? 'x' : ' '}] ${text}`;
+    }
+    case 'divider':
+      return '---';
+    default:
+      return text || null;
+  }
+}
+
+const LIST_TYPES = new Set(['bulleted_list_item', 'numbered_list_item', 'to_do']);
+
+export async function getNotionPageFullContent(
+  credentials: NotionCredentials,
+  pageId: string,
+): Promise<string> {
+  const client = getClient(credentials);
+  const entries: { type: string; md: string }[] = [];
+  let cursor: string | undefined;
+
+  do {
+    await throttleNotion();
+    const response = await client.blocks.children.list({
+      block_id: pageId,
+      page_size: 100,
+      start_cursor: cursor,
+    });
+
+    for (const result of response.results) {
+      if (!('type' in result)) continue;
+      const block = result as BlockObjectResponse;
+      if (block.type === 'divider') {
+        entries.push({ type: 'divider', md: '---' });
+        continue;
+      }
+      const md = blockToMarkdown(block);
+      if (md !== null) entries.push({ type: block.type, md });
+    }
+
+    cursor = response.next_cursor ?? undefined;
+  } while (cursor);
+
+  // Join with blank lines between blocks, but keep consecutive list items tight
+  const parts: string[] = [];
+  for (let i = 0; i < entries.length; i++) {
+    parts.push(entries[i].md);
+    if (i < entries.length - 1) {
+      const curIsList = LIST_TYPES.has(entries[i].type);
+      const nextIsList = LIST_TYPES.has(entries[i + 1].type);
+      parts.push(curIsList && nextIsList ? '\n' : '\n\n');
+    }
+  }
+  return parts.join('');
 }
 
 export async function getNotionDatabases(

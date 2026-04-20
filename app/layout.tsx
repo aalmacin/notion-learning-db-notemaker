@@ -48,6 +48,9 @@ export default async function RootLayout({
                 <Link href="/categories" className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50 transition-colors">
                   Categories
                 </Link>
+                <Link href="/review" className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50 transition-colors">
+                  Review
+                </Link>
                 <Link href="/settings" className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50 transition-colors">
                   Settings
                 </Link>
