@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Term, ConceptRefinement } from '@/lib/db';
+import type { ChatMessage, Term, ConceptRefinement } from '@/lib/db';
 import {
   submitPreRefinement,
   submitRefinement,
@@ -10,10 +10,12 @@ import {
   addRefinementToNotion,
 } from '@/actions/refinements';
 import { addToNotion } from '@/actions/notion';
+import { askQuestion } from '@/actions/chat';
 
 type Props = {
   term: Term;
   initialRefinements: ConceptRefinement[];
+  initialChats: Record<number, ChatMessage[]>;
 };
 
 type ViewMode = { type: 'form' } | { type: 'refinement-only-form' } | { type: 'attempt'; index: number };
@@ -37,7 +39,7 @@ function StepLabel({ n, label }: { n: number; label: string }) {
   );
 }
 
-export function TermDetailPage({ term, initialRefinements }: Props) {
+export function TermDetailPage({ term, initialRefinements, initialChats }: Props) {
   const router = useRouter();
   const [refinements, setRefinements] = useState(initialRefinements);
   const [viewMode, setViewMode] = useState<ViewMode>(
@@ -48,12 +50,15 @@ export function TermDetailPage({ term, initialRefinements }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [notionDone, setNotionDone] = useState(false);
   const [notionPageId, setNotionPageId] = useState(term.notion_page_id);
+  const [allChats, setAllChats] = useState<Record<number, ChatMessage[]>>(initialChats);
+  const [chatInput, setChatInput] = useState('');
 
   const [isPendingPre, startPre] = useTransition();
   const [isPendingRefinement, startRefinement] = useTransition();
   const [isPendingRefinementOnly, startRefinementOnly] = useTransition();
   const [isPendingNotion, startNotion] = useTransition();
   const [isPendingTermNotion, startTermNotion] = useTransition();
+  const [isPendingChat, startChat] = useTransition();
 
   const viewing = viewMode.type === 'attempt' ? (refinements[viewMode.index] ?? null) : null;
   const isLatest = viewMode.type === 'attempt' && viewMode.index === 0;
@@ -144,6 +149,33 @@ export function TermDetailPage({ term, initialRefinements }: Props) {
         setNotionPageId(updated.notion_page_id);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to add to Notion');
+      }
+    });
+  };
+
+  const handleAskQuestion = (refinementId: number) => {
+    const question = chatInput.trim();
+    if (!question) return;
+    // Optimistically add user message
+    setAllChats((prev) => ({
+      ...prev,
+      [refinementId]: [
+        ...(prev[refinementId] ?? []),
+        { id: -1, refinement_id: refinementId, role: 'user' as const, content: question, created_at: new Date().toISOString() },
+      ],
+    }));
+    setChatInput('');
+    startChat(async () => {
+      try {
+        const updated = await askQuestion(refinementId, question);
+        setAllChats((prev) => ({ ...prev, [refinementId]: updated }));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to send message');
+        // Revert optimistic update on error
+        setAllChats((prev) => ({
+          ...prev,
+          [refinementId]: (prev[refinementId] ?? []).filter((m) => m.id !== -1),
+        }));
       }
     });
   };
@@ -336,13 +368,85 @@ export function TermDetailPage({ term, initialRefinements }: Props) {
                 </div>
               )}
 
-              {/* Step 2 — Research prompt (only shown when step 1 done but not step 3) */}
+              {/* Step 2 — Research prompt with chat (only shown when step 1 done but not step 3) */}
               {viewing.pre_refinement && viewing.pre_refinement_accuracy !== null && !isComplete(viewing) && (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <StepLabel n={2} label="Research" />
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Do your research now, then come back to explain the concept again.
+                    Do your research now, then come back to explain the concept again. Ask questions below as you study.
                   </p>
+                  {/* Chat messages */}
+                  {(allChats[viewing.id] ?? []).length > 0 && (
+                    <div className="space-y-2 max-h-80 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-700 p-3">
+                      {(allChats[viewing.id] ?? []).map((msg) => (
+                        <div
+                          key={msg.id}
+                          className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                        >
+                          <p
+                            className={`max-w-[85%] rounded-lg px-3 py-2 text-xs leading-5 ${
+                              msg.role === 'user'
+                                ? 'bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900'
+                                : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
+                            }`}
+                          >
+                            {msg.content}
+                          </p>
+                        </div>
+                      ))}
+                      {isPendingChat && (
+                        <div className="flex justify-start">
+                          <p className="max-w-[85%] rounded-lg px-3 py-2 text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500">
+                            Thinking…
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {/* Chat input */}
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleAskQuestion(viewing.id)}
+                      placeholder={`Ask a question about ${term.name}…`}
+                      disabled={isPendingChat}
+                      className="flex-1 px-3 py-2 text-xs border border-zinc-200 dark:border-zinc-700 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-300 dark:focus:ring-zinc-600 disabled:opacity-50"
+                    />
+                    <button
+                      onClick={() => handleAskQuestion(viewing.id)}
+                      disabled={!chatInput.trim() || isPendingChat}
+                      className="px-3 py-2 text-xs font-medium rounded-lg bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Ask
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 2 — Research chat read-only (completed attempts) */}
+              {viewing.pre_refinement && viewing.pre_refinement_accuracy !== null && isComplete(viewing) && (allChats[viewing.id] ?? []).length > 0 && (
+                <div className="space-y-2">
+                  <StepLabel n={2} label="Research" />
+                  <div className="space-y-2 max-h-60 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-700 p-3">
+                    {(allChats[viewing.id] ?? []).map((msg) => (
+                      <div
+                        key={msg.id}
+                        className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <p
+                          className={`max-w-[85%] rounded-lg px-3 py-2 text-xs leading-5 ${
+                            msg.role === 'user'
+                              ? 'bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900'
+                              : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
+                          }`}
+                        >
+                          {msg.content}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 

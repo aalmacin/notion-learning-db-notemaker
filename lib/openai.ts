@@ -124,6 +124,31 @@ export async function evaluateRefinement(
   };
 }
 
+const CHAT_SYSTEM_PROMPT = (termName: string, termContent: string) =>
+  `You are a research assistant helping the user understand the concept "${termName}".
+Context: ${termContent}
+Answer only questions directly related to this concept. Be concise: respond in plain prose, no markdown, no bullet points. Maximum 2 short paragraphs.`;
+
+export async function chatAboutTerm(
+  termName: string,
+  termContent: string,
+  history: Array<{ role: 'user' | 'assistant'; content: string }>,
+  question: string,
+): Promise<string> {
+  const response = await client.chat.completions.create({
+    model: 'gpt-5.4-mini',
+    messages: [
+      { role: 'system', content: CHAT_SYSTEM_PROMPT(termName, termContent) },
+      ...history,
+      { role: 'user', content: question },
+    ],
+  });
+
+  const content = response.choices[0]?.message?.content;
+  if (!content) throw new Error('Empty response from OpenAI');
+  return content;
+}
+
 export async function explainTermWithAI(term: string, allowedCategories: string[], context?: string): Promise<TermExplanation> {
   const userContent = context ? `Term: ${term}\nContext: ${context}` : term;
   const response = await client.chat.completions.create({

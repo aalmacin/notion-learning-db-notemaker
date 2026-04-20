@@ -10,6 +10,7 @@ import {
   getTermById,
   updateTerm,
   getUserSettings,
+  getChatsByRefinementId,
   type ConceptRefinement,
 } from '@/lib/db';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -91,6 +92,8 @@ export async function addRefinementToNotion(termId: number, refinementId: number
     await updateTerm(supabase, termId, { notion_page_id: pageId });
   }
 
+  const chats = await getChatsByRefinementId(supabase, refinementId);
+
   await appendRefinementToNotionPage(
     credentials,
     pageId,
@@ -101,6 +104,7 @@ export async function addRefinementToNotion(termId: number, refinementId: number
     },
     term.name,
     settings.timezone,
+    chats,
   );
 
   revalidatePath(`/terms/${termId}`);
