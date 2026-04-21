@@ -165,7 +165,9 @@ export async function syncWithNotion(): Promise<{ synced: number; imported: numb
       await Promise.allSettled(
         completedTerms.map(async (term) => {
           const page = notionPageMap.get(term.notion_page_id!)!;
-          const explainedAt = page.date ?? term.created_at.slice(0, 10);
+          // Only sync explained content when the Date was set via the explanation page
+          if (!page.date) return;
+          const explainedAt = page.date;
           const row = existingByTermId.get(term.id);
 
           const fullContent = await getNotionPageFullContent(credentials, term.notion_page_id!);
