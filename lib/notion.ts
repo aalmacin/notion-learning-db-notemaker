@@ -205,6 +205,21 @@ export async function updateNotionPageMetadata(
   });
 }
 
+export async function updateNotionPageDate(
+  credentials: NotionCredentials,
+  pageId: string,
+  date: string,
+): Promise<void> {
+  const client = getClient(credentials);
+  await throttleNotion();
+  await client.pages.update({
+    page_id: pageId,
+    properties: {
+      Date: { date: { start: date } },
+    },
+  });
+}
+
 export async function appendRefinementToNotionPage(
   credentials: NotionCredentials,
   pageId: string,
@@ -216,9 +231,10 @@ export async function appendRefinementToNotionPage(
   termName: string,
   timezone = 'UTC',
   chats: ChatMessage[] = [],
+  date?: string,
 ): Promise<void> {
   const client = getClient(credentials);
-  const dateStr = localeDateStr(timezone);
+  const dateStr = date ?? localeDateStr(timezone);
   const formattedDate = new Date(`${dateStr}T12:00:00`).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',

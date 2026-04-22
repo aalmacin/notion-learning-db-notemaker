@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getTermById, getRefinementsByTermId, getChatsByRefinementIds } from '@/lib/db';
+import { getTermById, getRefinementsByTermId, getChatsByRefinementIds, getExplainedAtForTerm } from '@/lib/db';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { TermDetailPage } from '@/components/TermDetailPage';
 
@@ -12,7 +12,10 @@ export default async function TermPage({ params }: { params: Promise<{ id: strin
   const [term, refinements] = await Promise.all([getTermById(supabase, id), getRefinementsByTermId(supabase, id)]);
   if (!term) notFound();
 
-  const initialChats = await getChatsByRefinementIds(supabase, refinements.map((r) => r.id));
+  const [initialChats, explainedAt] = await Promise.all([
+    getChatsByRefinementIds(supabase, refinements.map((r) => r.id)),
+    getExplainedAtForTerm(supabase, id),
+  ]);
 
-  return <TermDetailPage term={term} initialRefinements={refinements} initialChats={initialChats} />;
+  return <TermDetailPage term={term} initialRefinements={refinements} initialChats={initialChats} explainedAt={explainedAt} />;
 }
