@@ -9,13 +9,14 @@ import {
   getRefinementById,
   getTermById,
   updateTerm,
+  setTermNotionDate,
   getUserSettings,
   getChatsByRefinementId,
   type ConceptRefinement,
 } from '@/lib/db';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { evaluatePreRefinement, evaluateRefinement } from '@/lib/openai';
-import { createNotionPage, appendRefinementToNotionPage } from '@/lib/notion';
+import { createNotionPage, appendRefinementToNotionPage, updateNotionPageDate } from '@/lib/notion';
 
 export async function submitPreRefinement(
   termId: number,
@@ -54,6 +55,32 @@ export async function submitRefinement(
   revalidatePath(`/terms/${termId}`);
   revalidatePath('/terms');
   return updated;
+}
+
+export async function setExplanationDate(termId: number, date: string): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  await setTermNotionDate(supabase, termId, date);
+
+  if (user) {
+    const [term, settings] = await Promise.all([
+      getTermById(supabase, termId),
+      getUserSettings(supabase, user.id),
+    ]);
+    if (term?.notion_page_id && settings?.notion_api_key && settings?.notion_database_id) {
+      await updateNotionPageDate(
+        { apiKey: settings.notion_api_key, databaseId: settings.notion_database_id },
+        term.notion_page_id,
+        date,
+      );
+    }
+  }
+
+  revalidatePath(`/terms/${termId}`);
+  revalidatePath('/terms');
 }
 
 export async function addRefinementToNotion(termId: number, refinementId: number): Promise<void> {
@@ -105,6 +132,7 @@ export async function addRefinementToNotion(termId: number, refinementId: number
     term.name,
     settings.timezone,
     chats,
+    term.notion_date ?? undefined,
   );
 
   revalidatePath(`/terms/${termId}`);

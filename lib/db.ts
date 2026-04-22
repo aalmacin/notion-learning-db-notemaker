@@ -468,6 +468,18 @@ export async function clearNotionCredentials(
   if (error) throw error;
 }
 
+export async function setTermNotionDate(
+  supabase: SupabaseClient,
+  termId: number,
+  date: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('terms')
+    .update({ notion_date: date })
+    .eq('id', termId);
+  if (error) throw error;
+}
+
 export async function markTermSynced(
   supabase: SupabaseClient,
   termId: number,
@@ -494,6 +506,19 @@ export type ReviewItem = {
   notion_content: string | null;
   categories: string[];
 };
+
+export async function getExplainedAtForTerm(
+  supabase: SupabaseClient,
+  termId: number,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from('term_explained_content')
+    .select('explained_at')
+    .eq('term_id', termId)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  return (data as { explained_at: string }[] | null)?.[0]?.explained_at ?? null;
+}
 
 export async function getExplainedContent(
   supabase: SupabaseClient,

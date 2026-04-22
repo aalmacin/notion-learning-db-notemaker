@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ChatMessage, Term, ConceptRefinement } from '@/lib/db';
 import {
@@ -8,6 +8,7 @@ import {
   submitRefinement,
   submitRefinementOnly,
   addRefinementToNotion,
+  setExplanationDate as saveExplanationDate,
 } from '@/actions/refinements';
 import { addToNotion } from '@/actions/notion';
 import { askQuestion } from '@/actions/chat';
@@ -16,6 +17,7 @@ type Props = {
   term: Term;
   initialRefinements: ConceptRefinement[];
   initialChats: Record<number, ChatMessage[]>;
+  explainedAt?: string | null;
 };
 
 type ViewMode = { type: 'form' } | { type: 'refinement-only-form' } | { type: 'attempt'; index: number };
@@ -39,7 +41,7 @@ function StepLabel({ n, label }: { n: number; label: string }) {
   );
 }
 
-export function TermDetailPage({ term, initialRefinements, initialChats }: Props) {
+export function TermDetailPage({ term, initialRefinements, initialChats, explainedAt }: Props) {
   const router = useRouter();
   const [refinements, setRefinements] = useState(initialRefinements);
   const [viewMode, setViewMode] = useState<ViewMode>(
@@ -50,9 +52,18 @@ export function TermDetailPage({ term, initialRefinements, initialChats }: Props
   const [error, setError] = useState<string | null>(null);
   const [notionDone, setNotionDone] = useState(false);
   const [notionPageId, setNotionPageId] = useState(term.notion_page_id);
+  const [explanationDate, setExplanationDate] = useState(
+    () => term.notion_date?.slice(0, 10) ?? explainedAt?.slice(0, 10) ?? '',
+  );
+  const [dateSaveStatus, setDateSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+
+  useEffect(() => {
+    setExplanationDate(term.notion_date?.slice(0, 10) ?? explainedAt?.slice(0, 10) ?? '');
+  }, [term.notion_date, explainedAt]);
   const [allChats, setAllChats] = useState<Record<number, ChatMessage[]>>(initialChats);
   const [chatInput, setChatInput] = useState('');
 
+  const [, startDate] = useTransition();
   const [isPendingPre, startPre] = useTransition();
   const [isPendingRefinement, startRefinement] = useTransition();
   const [isPendingRefinementOnly, startRefinementOnly] = useTransition();
@@ -68,6 +79,20 @@ export function TermDetailPage({ term, initialRefinements, initialChats }: Props
   const isAwaitingRefinement = (r: ConceptRefinement) =>
     r.refinement_formatted_note === null &&
     (!r.pre_refinement || r.pre_refinement_accuracy !== null);
+
+  const handleDateChange = (newDate: string) => {
+    setExplanationDate(newDate);
+    if (!newDate) return;
+    setDateSaveStatus('saving');
+    startDate(async () => {
+      try {
+        await saveExplanationDate(term.id, newDate);
+        setDateSaveStatus('saved');
+      } catch {
+        setDateSaveStatus('idle');
+      }
+    });
+  };
 
   const handleSubmitPre = () => {
     if (!preText.trim()) return;
@@ -234,6 +259,27 @@ export function TermDetailPage({ term, initialRefinements, initialChats }: Props
               </select>
             )}
           </div>
+
+          {/* Explanation date — always visible once term is in Notion */}
+          {notionPageId && (
+            <div className="flex items-center gap-3">
+              <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 shrink-0">
+                Explanation Date
+              </label>
+              <input
+                type="date"
+                value={explanationDate}
+                onChange={(e) => handleDateChange(e.target.value)}
+                className="px-3 py-1.5 text-sm border border-zinc-200 dark:border-zinc-700 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-300 dark:focus:ring-zinc-600"
+              />
+              {dateSaveStatus === 'saving' && (
+                <span className="text-xs text-zinc-400 dark:text-zinc-500">Saving…</span>
+              )}
+              {dateSaveStatus === 'saved' && (
+                <span className="text-xs text-zinc-400 dark:text-zinc-500">Saved</span>
+              )}
+            </div>
+          )}
 
           {/* Notion gate — must store term in Notion before starting */}
           {!notionPageId && (
