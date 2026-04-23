@@ -371,7 +371,7 @@ export async function getChatsByRefinementId(
     .from('research_chats')
     .select('*')
     .eq('refinement_id', refinementId)
-    .order('created_at', { ascending: true });
+    .order('id', { ascending: true });
   if (error) throw error;
   return data as ChatMessage[];
 }
@@ -385,7 +385,7 @@ export async function getChatsByRefinementIds(
     .from('research_chats')
     .select('*')
     .in('refinement_id', refinementIds)
-    .order('created_at', { ascending: true });
+    .order('id', { ascending: true });
   if (error) throw error;
   const result: Record<number, ChatMessage[]> = {};
   for (const row of data as ChatMessage[]) {

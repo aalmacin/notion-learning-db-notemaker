@@ -163,6 +163,15 @@ export async function submitRefinementOnly(
   return updated;
 }
 
+export async function createAttempt(termId: number): Promise<ConceptRefinement> {
+  const supabase = await createSupabaseServerClient();
+  const term = await getTermById(supabase, termId);
+  if (!term) throw new Error('Term not found');
+  const refinement = await createRefinement(supabase, termId, '');
+  revalidatePath(`/terms/${termId}`);
+  return refinement;
+}
+
 export async function removeRefinement(id: number, termId: number): Promise<void> {
   const supabase = await createSupabaseServerClient();
   await deleteConceptRefinement(supabase, id);
