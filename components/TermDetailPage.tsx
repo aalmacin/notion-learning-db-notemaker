@@ -6,7 +6,7 @@ import type { ChatMessage, Term, ConceptRefinement } from '@/lib/db';
 import {
   submitPreRefinement,
   submitRefinement,
-  submitRefinementOnly,
+  createAttempt,
   addRefinementToNotion,
   setExplanationDate as saveExplanationDate,
 } from '@/actions/refinements';
@@ -20,7 +20,7 @@ type Props = {
   explainedAt?: string | null;
 };
 
-type ViewMode = { type: 'form' } | { type: 'refinement-only-form' } | { type: 'attempt'; index: number };
+type ViewMode = { type: 'form' } | { type: 'attempt'; index: number };
 
 function accuracyColor(accuracy: number): string {
   if (accuracy >= 80) return 'text-green-600 dark:text-green-400';
@@ -66,13 +66,14 @@ export function TermDetailPage({ term, initialRefinements, initialChats, explain
   const [, startDate] = useTransition();
   const [isPendingPre, startPre] = useTransition();
   const [isPendingRefinement, startRefinement] = useTransition();
-  const [isPendingRefinementOnly, startRefinementOnly] = useTransition();
+  const [isPendingNewAttempt, startNewAttempt] = useTransition();
   const [isPendingNotion, startNotion] = useTransition();
   const [isPendingTermNotion, startTermNotion] = useTransition();
   const [isPendingChat, startChat] = useTransition();
 
-  const viewing = viewMode.type === 'attempt' ? (refinements[viewMode.index] ?? null) : null;
-  const isLatest = viewMode.type === 'attempt' && viewMode.index === 0;
+  const viewingIndex = viewMode.type === 'attempt' ? viewMode.index : 0;
+  const viewing = viewMode.type === 'attempt' ? (refinements[viewingIndex] ?? null) : null;
+  const isLatest = viewMode.type === 'attempt' && viewingIndex === 0;
   const latest = refinements[0] ?? null;
 
   const isComplete = (r: ConceptRefinement) => r.refinement_formatted_note !== null;
@@ -138,27 +139,18 @@ export function TermDetailPage({ term, initialRefinements, initialChats, explain
     });
   };
 
-  const handleSubmitRefinementOnly = () => {
-    if (!refinementText.trim()) return;
-    setError(null);
-    startRefinementOnly(async () => {
-      try {
-        const result = await submitRefinementOnly(term.id, refinementText.trim());
-        setRefinements((prev) => [result, ...prev]);
-        setViewMode({ type: 'attempt', index: 0 });
-        setRefinementText('');
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to submit');
-      }
-    });
-  };
-
   const handleStartNewAttempt = () => {
-    // On subsequent attempts the user is no longer "cold", skip straight to step 3
-    setViewMode({ type: 'refinement-only-form' });
-    setRefinementText('');
     setError(null);
     setNotionDone(false);
+    startNewAttempt(async () => {
+      try {
+        const result = await createAttempt(term.id);
+        setRefinements((prev) => [result, ...prev]);
+        setViewMode({ type: 'attempt', index: 0 });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to start new attempt');
+      }
+    });
   };
 
   const handleAddTermToNotion = () => {
@@ -245,7 +237,7 @@ export function TermDetailPage({ term, initialRefinements, initialChats, explain
             </h2>
             {refinements.length > 0 && viewMode.type === 'attempt' && (
               <select
-                value={viewMode.index}
+                value={viewingIndex}
                 onChange={(e) => setViewMode({ type: 'attempt', index: Number(e.target.value) })}
                 className="text-xs border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 focus:outline-none"
               >
@@ -325,70 +317,6 @@ export function TermDetailPage({ term, initialRefinements, initialChats, explain
             </div>
           )}
 
-          {/* Step 3 — Direct refined explanation form (subsequent attempts) */}
-          {notionPageId && viewMode.type === 'refinement-only-form' && (
-            <div className="space-y-6">
-              <div className="space-y-3">
-                <StepLabel n={3} label="Refined Explanation" />
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Explain <strong>{term.name}</strong> after researching.
-                </p>
-                <textarea
-                  value={refinementText}
-                  onChange={(e) => setRefinementText(e.target.value)}
-                  rows={5}
-                  placeholder="Explain the concept again after researching…"
-                  className="w-full px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-700 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-300 dark:focus:ring-zinc-600 resize-none"
-                />
-                {error && (
-                  <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
-                )}
-                <button
-                  onClick={handleSubmitRefinementOnly}
-                  disabled={!refinementText.trim() || isPendingRefinementOnly}
-                  className="px-4 py-2 text-sm font-medium rounded-lg bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  {isPendingRefinementOnly ? 'Evaluating…' : 'Submit'}
-                </button>
-              </div>
-
-              {/* Previous attempt shown as reference */}
-              {latest && (
-                <div className="space-y-4 border-t border-zinc-100 dark:border-zinc-800 pt-5">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                    Previous Attempt
-                  </p>
-                  {latest.pre_refinement && (
-                    <div className="space-y-2">
-                      <StepLabel n={1} label="Cold Explanation" />
-                      <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-3 space-y-2">
-                        <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-5">{latest.pre_refinement}</p>
-                        {latest.pre_refinement_accuracy !== null && (
-                          <p className={`text-xs font-medium ${accuracyColor(latest.pre_refinement_accuracy)}`}>
-                            Accuracy: {latest.pre_refinement_accuracy}%
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  {latest.refinement && (
-                    <div className="space-y-2">
-                      <StepLabel n={3} label="Refined Explanation" />
-                      <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-3 space-y-2">
-                        <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-5">{latest.refinement}</p>
-                        {latest.refinement_accuracy !== null && (
-                          <p className={`text-xs font-medium ${accuracyColor(latest.refinement_accuracy)}`}>
-                            Accuracy: {latest.refinement_accuracy}%
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Attempt view */}
           {notionPageId && viewMode.type === 'attempt' && viewing && (
             <div className="space-y-6">
@@ -414,64 +342,98 @@ export function TermDetailPage({ term, initialRefinements, initialChats, explain
                 </div>
               )}
 
-              {/* Step 2 — Research chat (always available after step 1) */}
-              {viewing.pre_refinement && viewing.pre_refinement_accuracy !== null && (
-                <div className="space-y-3">
-                  <StepLabel n={2} label="Research" />
-                  {!isComplete(viewing) && (
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                      Do your research now, then come back to explain the concept again. Ask questions below as you study.
+              {/* Step 2 — Research chat (always available) */}
+              <div className="space-y-3">
+                <StepLabel n={2} label="Research" />
+                {!isComplete(viewing) && (
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Do your research now, then come back to explain the concept again. Ask questions below as you study.
+                  </p>
+                )}
+                {/* Previous attempts' research chats shown as reference */}
+                {refinements.slice(viewingIndex + 1).some((r) => (allChats[r.id] ?? []).length > 0) && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                      Prior Research
                     </p>
-                  )}
-                  {/* Chat messages */}
-                  {(allChats[viewing.id] ?? []).length > 0 && (
-                    <div className="space-y-2 max-h-80 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-700 p-3">
-                      {(allChats[viewing.id] ?? []).map((msg) => (
-                        <div
-                          key={msg.id}
-                          className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                        >
-                          <p
-                            className={`max-w-[85%] rounded-lg px-3 py-2 text-xs leading-5 ${
-                              msg.role === 'user'
-                                ? 'bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900'
-                                : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
-                            }`}
-                          >
-                            {msg.content}
-                          </p>
+                    {refinements.slice(viewingIndex + 1).map((r, offset) => {
+                      const chats = allChats[r.id] ?? [];
+                      if (chats.length === 0) return null;
+                      const attemptNumber = refinements.length - (viewingIndex + 1 + offset);
+                      return (
+                        <div key={r.id} className="space-y-2">
+                          <p className="text-xs text-zinc-400 dark:text-zinc-500">Attempt {attemptNumber}</p>
+                          <div className="space-y-1.5 max-h-60 overflow-y-auto rounded-lg border border-zinc-100 dark:border-zinc-800 p-3 opacity-60">
+                            {chats.map((msg) => (
+                              <div
+                                key={msg.id}
+                                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                              >
+                                <p
+                                  className={`max-w-[85%] rounded-lg px-3 py-2 text-xs leading-5 ${
+                                    msg.role === 'user'
+                                      ? 'bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900'
+                                      : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
+                                  }`}
+                                >
+                                  {msg.content}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      ))}
-                      {isPendingChat && (
-                        <div className="flex justify-start">
-                          <p className="max-w-[85%] rounded-lg px-3 py-2 text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500">
-                            Thinking…
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {/* Chat input */}
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={chatInput}
-                      onChange={(e) => setChatInput(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleAskQuestion(viewing.id)}
-                      placeholder={`Ask a question about ${term.name}…`}
-                      disabled={isPendingChat}
-                      className="flex-1 px-3 py-2 text-xs border border-zinc-200 dark:border-zinc-700 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-300 dark:focus:ring-zinc-600 disabled:opacity-50"
-                    />
-                    <button
-                      onClick={() => handleAskQuestion(viewing.id)}
-                      disabled={!chatInput.trim() || isPendingChat}
-                      className="px-3 py-2 text-xs font-medium rounded-lg bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    >
-                      Ask
-                    </button>
+                      );
+                    })}
                   </div>
+                )}
+                {/* Chat messages */}
+                {(allChats[viewing.id] ?? []).length > 0 && (
+                  <div className="space-y-2 max-h-80 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-700 p-3">
+                    {(allChats[viewing.id] ?? []).map((msg) => (
+                      <div
+                        key={msg.id}
+                        className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <p
+                          className={`max-w-[85%] rounded-lg px-3 py-2 text-xs leading-5 ${
+                            msg.role === 'user'
+                              ? 'bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900'
+                              : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
+                          }`}
+                        >
+                          {msg.content}
+                        </p>
+                      </div>
+                    ))}
+                    {isPendingChat && (
+                      <div className="flex justify-start">
+                        <p className="max-w-[85%] rounded-lg px-3 py-2 text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500">
+                          Thinking…
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Chat input */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleAskQuestion(viewing.id)}
+                    placeholder={`Ask a question about ${term.name}…`}
+                    disabled={isPendingChat}
+                    className="flex-1 px-3 py-2 text-xs border border-zinc-200 dark:border-zinc-700 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-300 dark:focus:ring-zinc-600 disabled:opacity-50"
+                  />
+                  <button
+                    onClick={() => handleAskQuestion(viewing.id)}
+                    disabled={!chatInput.trim() || isPendingChat}
+                    className="px-3 py-2 text-xs font-medium rounded-lg bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Ask
+                  </button>
                 </div>
-              )}
+              </div>
 
               {/* Step 3 — Refinement (shown after step 1, or always for refinement-only attempts) */}
               {(!viewing.pre_refinement || viewing.pre_refinement_accuracy !== null) && (
@@ -559,9 +521,10 @@ export function TermDetailPage({ term, initialRefinements, initialChats, explain
                           </button>
                           <button
                             onClick={handleStartNewAttempt}
-                            className="px-4 py-2 text-sm font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                            disabled={isPendingNewAttempt}
+                            className="px-4 py-2 text-sm font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                           >
-                            Start New Attempt
+                            {isPendingNewAttempt ? 'Starting…' : 'Start New Attempt'}
                           </button>
                           {error && (
                             <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
