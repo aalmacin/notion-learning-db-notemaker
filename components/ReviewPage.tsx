@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
+import Link from 'next/link';
 import Markdown from 'react-markdown';
 import type { ReviewItem } from '@/lib/db';
 import { getReviewData } from '@/actions/review';
@@ -141,7 +142,15 @@ export function ReviewPage({
               <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
                 {items.map((item) => (
                   <div key={item.term_id} className="px-4 py-4">
-                    <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50 mb-2">{item.term_name}</h3>
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">{item.term_name}</h3>
+                      <Link
+                        href={`/terms/${item.term_id}`}
+                        className="text-sm text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-50 transition-colors"
+                      >
+                        View →
+                      </Link>
+                    </div>
                     {item.notion_content ? (
                       <div className="prose prose-sm dark:prose-invert max-w-none text-zinc-700 dark:text-zinc-300">
                         <Markdown>{item.notion_content}</Markdown>
