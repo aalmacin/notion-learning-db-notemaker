@@ -208,6 +208,7 @@ export function TermsTable({ initialData, initialCategories, initialCategory, ti
   const [notionSuccessId, setNotionSuccessId] = useState<number | null>(null);
   const [notionFilter, setNotionFilter] = useState<'all' | 'pending' | 'added'>('all');
   const [priorityFilter, setPriorityFilter] = useState<'all' | Priority>('all');
+  const [dailyLearningFilter, setDailyLearningFilter] = useState<'all' | 'done' | 'not-done'>('all');
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<number | null>(null);
   const [deleteSuccess, setDeleteSuccess] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
@@ -238,9 +239,11 @@ export function TermsTable({ initialData, initialCategories, initialCategory, ti
       if (notionFilter === 'added' && term.notion_page_id === null) return false;
       if (selectedCategories.length > 0 && !selectedCategories.every((cat) => term.categories.includes(cat))) return false;
       if (priorityFilter !== 'all' && term.priority !== priorityFilter) return false;
+      if (dailyLearningFilter === 'done' && !term.daily_learning_done) return false;
+      if (dailyLearningFilter === 'not-done' && term.daily_learning_done) return false;
       return true;
     });
-  }, [data, selectedCategories, notionFilter, priorityFilter]);
+  }, [data, selectedCategories, notionFilter, priorityFilter, dailyLearningFilter]);
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => deleteTerm(id),
@@ -516,6 +519,21 @@ export function TermsTable({ initialData, initialCategories, initialCategory, ti
               }`}
             >
               {val === 'all' ? 'All priorities' : val}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-1 border border-zinc-200 dark:border-zinc-700 rounded-lg overflow-hidden">
+          {(['all', 'done', 'not-done'] as const).map((val) => (
+            <button
+              key={val}
+              onClick={() => { setDailyLearningFilter(val); setPagination((p) => ({ ...p, pageIndex: 0 })); }}
+              className={`px-3 py-2 text-xs font-medium transition-colors ${
+                dailyLearningFilter === val
+                  ? 'bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900'
+                  : 'bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+              }`}
+            >
+              {val === 'done' ? 'Learning done' : val === 'not-done' ? 'Learning pending' : 'All learning'}
             </button>
           ))}
         </div>
