@@ -6,6 +6,7 @@ import type { ChatMessage, Term, ConceptRefinement } from '@/lib/db';
 import {
   submitPreRefinement,
   submitRefinement,
+  attachColdExplanation,
   createAttempt,
   addRefinementToNotion,
   setExplanationDate as saveExplanationDate,
@@ -48,6 +49,7 @@ export function TermDetailPage({ term, initialRefinements, initialChats, explain
     initialRefinements.length === 0 ? { type: 'form' } : { type: 'attempt', index: 0 },
   );
   const [preText, setPreText] = useState('');
+  const [coldText, setColdText] = useState('');
   const [refinementText, setRefinementText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [notionDone, setNotionDone] = useState(false);
@@ -65,6 +67,7 @@ export function TermDetailPage({ term, initialRefinements, initialChats, explain
 
   const [, startDate] = useTransition();
   const [isPendingPre, startPre] = useTransition();
+  const [isPendingCold, startCold] = useTransition();
   const [isPendingRefinement, startRefinement] = useTransition();
   const [isPendingNewAttempt, startNewAttempt] = useTransition();
   const [isPendingNotion, startNotion] = useTransition();
@@ -78,8 +81,7 @@ export function TermDetailPage({ term, initialRefinements, initialChats, explain
 
   const isComplete = (r: ConceptRefinement) => r.refinement_formatted_note !== null;
   const isAwaitingRefinement = (r: ConceptRefinement) =>
-    r.refinement_formatted_note === null &&
-    (!r.pre_refinement || r.pre_refinement_accuracy !== null);
+    r.refinement_formatted_note === null && r.pre_refinement_accuracy !== null;
 
   const handleDateChange = (newDate: string) => {
     setExplanationDate(newDate);
@@ -104,6 +106,20 @@ export function TermDetailPage({ term, initialRefinements, initialChats, explain
         setRefinements((prev) => [result, ...prev]);
         setViewMode({ type: 'attempt', index: 0 });
         setPreText('');
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to submit');
+      }
+    });
+  };
+
+  const handleAttachCold = () => {
+    if (!coldText.trim() || !latest) return;
+    setError(null);
+    startCold(async () => {
+      try {
+        const result = await attachColdExplanation(latest.id, term.id, coldText.trim());
+        setRefinements((prev) => [result, ...prev.slice(1)]);
+        setColdText('');
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to submit');
       }
@@ -197,6 +213,29 @@ export function TermDetailPage({ term, initialRefinements, initialChats, explain
     });
   };
 
+  const handleStartResearch = () => {
+    const question = chatInput.trim();
+    if (!question) return;
+    setError(null);
+    setChatInput('');
+    startChat(async () => {
+      try {
+        const newAttempt = await createAttempt(term.id);
+        setRefinements((prev) => [newAttempt, ...prev]);
+        setViewMode({ type: 'attempt', index: 0 });
+        setAllChats((prev) => ({
+          ...prev,
+          [newAttempt.id]: [{ id: -1, refinement_id: newAttempt.id, role: 'user' as const, content: question, created_at: new Date().toISOString() }],
+        }));
+        const updated = await askQuestion(newAttempt.id, question);
+        setAllChats((prev) => ({ ...prev, [newAttempt.id]: updated }));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to start research');
+        setChatInput(question);
+      }
+    });
+  };
+
   return (
     <div className="bg-zinc-50 dark:bg-black p-8">
       <div className="max-w-3xl mx-auto space-y-8">
@@ -273,11 +312,11 @@ export function TermDetailPage({ term, initialRefinements, initialChats, explain
             </div>
           )}
 
-          {/* Notion gate — must store term in Notion before starting */}
-          {!notionPageId && (
+          {/* Notion gate — only required for cold explanation */}
+          {!notionPageId && viewMode.type === 'form' && (
             <div className="space-y-3">
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                Add this term to Notion before starting the Feynman method.
+                Add this term to Notion to use the cold explanation step.
               </p>
               {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
               <button
@@ -290,7 +329,7 @@ export function TermDetailPage({ term, initialRefinements, initialChats, explain
             </div>
           )}
 
-          {/* Step 1 — Pre-refinement form (first attempt only) */}
+          {/* Step 1 — Pre-refinement form (first attempt only, requires Notion) */}
           {notionPageId && viewMode.type === 'form' && (
             <div className="space-y-3">
               <StepLabel n={1} label="Cold Explanation" />
@@ -317,11 +356,42 @@ export function TermDetailPage({ term, initialRefinements, initialChats, explain
             </div>
           )}
 
+          {/* Step 2 — Research available in form mode without cold start */}
+          {viewMode.type === 'form' && (
+            <div className="space-y-3">
+              <StepLabel n={2} label="Research" />
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Do your research now, then come back to explain the concept again. Ask questions below as you study.
+              </p>
+              {error && (
+                <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
+              )}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleStartResearch()}
+                  placeholder={`Ask a question about ${term.name}…`}
+                  disabled={isPendingChat}
+                  className="flex-1 px-3 py-2 text-xs border border-zinc-200 dark:border-zinc-700 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-300 dark:focus:ring-zinc-600 disabled:opacity-50"
+                />
+                <button
+                  onClick={handleStartResearch}
+                  disabled={!chatInput.trim() || isPendingChat}
+                  className="px-3 py-2 text-xs font-medium rounded-lg bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isPendingChat ? 'Starting…' : 'Ask'}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Attempt view */}
-          {notionPageId && viewMode.type === 'attempt' && viewing && (
+          {viewMode.type === 'attempt' && viewing && (
             <div className="space-y-6">
-              {/* Step 1 result — hidden for refinement-only attempts */}
-              {viewing.pre_refinement && (
+              {/* Step 1 — Cold Explanation */}
+              {viewing.pre_refinement ? (
                 <div className="space-y-3">
                   <StepLabel n={1} label="Cold Explanation" />
                   <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-4 space-y-3">
@@ -340,7 +410,29 @@ export function TermDetailPage({ term, initialRefinements, initialChats, explain
                     )}
                   </div>
                 </div>
-              )}
+              ) : isLatest && !isComplete(viewing) ? (
+                <div className="space-y-3">
+                  <StepLabel n={1} label="Cold Explanation" />
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Explain <strong>{term.name}</strong> without looking anything up. Required before writing the refined explanation.
+                  </p>
+                  <textarea
+                    value={coldText}
+                    onChange={(e) => setColdText(e.target.value)}
+                    rows={5}
+                    placeholder="Write everything you know about this concept…"
+                    className="w-full px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-700 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-300 dark:focus:ring-zinc-600 resize-none"
+                  />
+                  {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+                  <button
+                    onClick={handleAttachCold}
+                    disabled={!coldText.trim() || isPendingCold}
+                    className="px-4 py-2 text-sm font-medium rounded-lg bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isPendingCold ? 'Evaluating…' : 'Submit'}
+                  </button>
+                </div>
+              ) : null}
 
               {/* Step 2 — Research chat (always available) */}
               <div className="space-y-3">
@@ -435,8 +527,8 @@ export function TermDetailPage({ term, initialRefinements, initialChats, explain
                 </div>
               </div>
 
-              {/* Step 3 — Refinement (shown after step 1, or always for refinement-only attempts) */}
-              {(!viewing.pre_refinement || viewing.pre_refinement_accuracy !== null) && (
+              {/* Step 3 — Refinement (requires cold explanation to be evaluated first) */}
+              {viewing.pre_refinement_accuracy !== null && (
                 <div className="space-y-3">
                   <StepLabel n={3} label="Refined Explanation" />
 

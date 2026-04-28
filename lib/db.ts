@@ -326,6 +326,23 @@ export async function updatePreRefinementResult(
   return data as ConceptRefinement;
 }
 
+export async function setPreRefinement(
+  supabase: SupabaseClient,
+  id: number,
+  preRefinement: string,
+  accuracy: number,
+  review: string,
+): Promise<ConceptRefinement> {
+  const { data, error } = await supabase
+    .from('concept_refinements')
+    .update({ pre_refinement: preRefinement, pre_refinement_accuracy: accuracy, pre_refinement_review: review })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as ConceptRefinement;
+}
+
 export async function updateRefinementData(
   supabase: SupabaseClient,
   id: number,
