@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import {
   createRefinement,
   updatePreRefinementResult,
+  setPreRefinement,
   updateRefinementData,
   deleteConceptRefinement,
   getRefinementById,
@@ -160,6 +161,22 @@ export async function submitRefinementOnly(
 
   revalidatePath(`/terms/${termId}`);
   revalidatePath('/terms');
+  return updated;
+}
+
+export async function attachColdExplanation(
+  refinementId: number,
+  termId: number,
+  userExplanation: string,
+): Promise<ConceptRefinement> {
+  const supabase = await createSupabaseServerClient();
+  const term = await getTermById(supabase, termId);
+  if (!term) throw new Error('Term not found');
+
+  const result = await evaluatePreRefinement(term.name, userExplanation);
+  const updated = await setPreRefinement(supabase, refinementId, userExplanation, result.accuracy, result.review);
+
+  revalidatePath(`/terms/${termId}`);
   return updated;
 }
 
