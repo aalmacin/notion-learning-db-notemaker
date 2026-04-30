@@ -81,7 +81,7 @@ export function TermDetailPage({ term, initialRefinements, initialChats, explain
 
   const isComplete = (r: ConceptRefinement) => r.refinement_formatted_note !== null;
   const isAwaitingRefinement = (r: ConceptRefinement) =>
-    r.refinement_formatted_note === null && r.pre_refinement_accuracy !== null;
+    r.refinement_formatted_note === null && (!r.pre_refinement || r.pre_refinement_accuracy !== null);
 
   const handleDateChange = (newDate: string) => {
     setExplanationDate(newDate);
@@ -410,7 +410,7 @@ export function TermDetailPage({ term, initialRefinements, initialChats, explain
                     )}
                   </div>
                 </div>
-              ) : isLatest && !isComplete(viewing) ? (
+              ) : isLatest && !isComplete(viewing) && refinements.length === 1 ? (
                 <div className="space-y-3">
                   <StepLabel n={1} label="Cold Explanation" />
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -527,8 +527,8 @@ export function TermDetailPage({ term, initialRefinements, initialChats, explain
                 </div>
               </div>
 
-              {/* Step 3 — Refinement (requires cold explanation to be evaluated first) */}
-              {viewing.pre_refinement_accuracy !== null && (
+              {/* Step 3 — Refinement (requires cold explanation evaluation, or skipped if no cold explanation) */}
+              {(!viewing.pre_refinement || viewing.pre_refinement_accuracy !== null) && (
                 <div className="space-y-3">
                   <StepLabel n={3} label="Refined Explanation" />
 
