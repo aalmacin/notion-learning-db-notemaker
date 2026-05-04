@@ -4,6 +4,7 @@ import { getTerm, insertTerm, updateTerm, deleteTerm, getAllCategories, getUserS
 import { explainTermWithAI } from '@/lib/openai';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createNotionPage, archiveNotionPage } from '@/lib/notion';
+import { revalidatePath } from 'next/cache';
 import type { Term } from '@/lib/db';
 
 export type ExplainResult = Term & { alreadyExisted?: true };
@@ -74,5 +75,6 @@ export async function explainTerm(rawName: string, context?: string): Promise<Ex
     }
   }
 
+  revalidatePath('/terms');
   return term;
 }

@@ -19,7 +19,7 @@ import {
 } from '@tanstack/react-table';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
-import { deleteTerm, updateTermPriority } from '@/actions/terms';
+import { deleteTerm, fetchAllTerms, updateTermPriority } from '@/actions/terms';
 import { addToNotion, syncWithNotion } from '@/actions/notion';
 import { updateTermCategories } from '@/actions/categories';
 import type { Term, Category, Priority } from '@/lib/db';
@@ -217,8 +217,9 @@ export function TermsTable({ initialData, initialCategories, initialCategory, ti
 
   const { data = initialData } = useQuery({
     queryKey: queryKeys.terms.all(),
-    queryFn: async () => initialData,
+    queryFn: fetchAllTerms,
     initialData,
+    staleTime: 0,
   });
 
   const { data: allCategories = initialCategories } = useQuery({
