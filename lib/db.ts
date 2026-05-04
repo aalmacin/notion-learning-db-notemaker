@@ -48,15 +48,20 @@ export type ConceptRefinement = {
 type TermRow = Omit<Term, 'categories' | 'explained'>;
 
 async function getCategoriesForTerm(supabase: SupabaseClient, termId: number): Promise<string[]> {
-  const { data, error } = await supabase
+  const { data: links, error } = await supabase
     .from('term_categories')
-    .select('categories(name)')
-    .eq('term_id', termId)
-    .order('categories(name)');
+    .select('category_id')
+    .eq('term_id', termId);
   if (error) throw error;
-  return (data as unknown as { categories: { name: string } | null }[])
-    .map((r) => r.categories?.name)
-    .filter((n): n is string => n != null);
+  if (!links || links.length === 0) return [];
+  const ids = (links as { category_id: number }[]).map((r) => r.category_id);
+  const { data: cats, error: catsError } = await supabase
+    .from('categories')
+    .select('name')
+    .in('id', ids)
+    .order('name');
+  if (catsError) throw catsError;
+  return (cats as { name: string }[]).map((c) => c.name);
 }
 
 async function upsertCategories(supabase: SupabaseClient, names: string[]): Promise<number[]> {
@@ -130,16 +135,38 @@ export async function getAllTerms(supabase: SupabaseClient): Promise<Term[]> {
     .order('created_at', { ascending: false });
   if (error) throw error;
 
-  const { data: catLinks, error: catError } = await supabase
-    .from('term_categories')
-    .select('term_id, categories(name)');
-  if (catError) throw catError;
-
+  const termIds = (rows as TermRow[]).map((row) => row.id);
   const catMap = new Map<number, string[]>();
-  for (const link of catLinks as unknown as { term_id: number; categories: { name: string } | null }[]) {
-    if (!link.categories) continue;
-    if (!catMap.has(link.term_id)) catMap.set(link.term_id, []);
-    catMap.get(link.term_id)!.push(link.categories.name);
+
+  if (termIds.length > 0) {
+    // Batch by termIds to avoid the PostgREST default row limit (1000)
+    const BATCH_SIZE = 200;
+    const allCatLinks: { term_id: number; category_id: number }[] = [];
+    for (let i = 0; i < termIds.length; i += BATCH_SIZE) {
+      const batch = termIds.slice(i, i + BATCH_SIZE);
+      const { data, error: batchError } = await supabase
+        .from('term_categories')
+        .select('term_id, category_id')
+        .in('term_id', batch);
+      if (batchError) throw batchError;
+      if (data) allCatLinks.push(...(data as { term_id: number; category_id: number }[]));
+    }
+
+    if (allCatLinks.length > 0) {
+      const categoryIds = [...new Set(allCatLinks.map((l) => l.category_id))];
+      const { data: cats, error: catsError } = await supabase
+        .from('categories')
+        .select('id, name')
+        .in('id', categoryIds);
+      if (catsError) throw catsError;
+      const catNameById = new Map((cats as { id: number; name: string }[]).map((c) => [c.id, c.name]));
+      for (const link of allCatLinks) {
+        const name = catNameById.get(link.category_id);
+        if (!name) continue;
+        if (!catMap.has(link.term_id)) catMap.set(link.term_id, []);
+        catMap.get(link.term_id)!.push(name);
+      }
+    }
   }
 
   const { data: explained, error: explainedError } = await supabase
@@ -606,17 +633,31 @@ export async function getReviewItemsByMonth(
   }[];
 
   const termIds = rows.map((r) => r.id);
-  const { data: catLinks, error: catError } = await supabase
-    .from('term_categories')
-    .select('term_id, categories(name)')
-    .in('term_id', termIds);
-  if (catError) throw catError;
-
   const catMap = new Map<number, string[]>();
-  for (const link of catLinks as unknown as { term_id: number; categories: { name: string } | null }[]) {
-    if (!link.categories) continue;
-    if (!catMap.has(link.term_id)) catMap.set(link.term_id, []);
-    catMap.get(link.term_id)!.push(link.categories.name);
+
+  if (termIds.length > 0) {
+    const { data: catLinks, error: catError } = await supabase
+      .from('term_categories')
+      .select('term_id, category_id')
+      .in('term_id', termIds);
+    if (catError) throw catError;
+
+    if (catLinks && catLinks.length > 0) {
+      const typedLinks = catLinks as { term_id: number; category_id: number }[];
+      const categoryIds = [...new Set(typedLinks.map((l) => l.category_id))];
+      const { data: cats, error: catsError } = await supabase
+        .from('categories')
+        .select('id, name')
+        .in('id', categoryIds);
+      if (catsError) throw catsError;
+      const catNameById = new Map((cats as { id: number; name: string }[]).map((c) => [c.id, c.name]));
+      for (const link of typedLinks) {
+        const name = catNameById.get(link.category_id);
+        if (!name) continue;
+        if (!catMap.has(link.term_id)) catMap.set(link.term_id, []);
+        catMap.get(link.term_id)!.push(name);
+      }
+    }
   }
 
   return rows.map((row) => ({

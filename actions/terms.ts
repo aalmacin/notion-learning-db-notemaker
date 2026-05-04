@@ -1,6 +1,6 @@
 'use server';
 
-import { deleteTerm as dbDeleteTerm, getAllCategories, getTermById, getUserSettings, updateTerm } from '@/lib/db';
+import { deleteTerm as dbDeleteTerm, getAllCategories, getAllTerms, getTermById, getUserSettings, updateTerm } from '@/lib/db';
 import { explainTermWithAI } from '@/lib/openai';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { archiveNotionPage, unarchiveNotionPage, updateNotionPageContent, updateNotionPageMetadata } from '@/lib/notion';
@@ -52,6 +52,11 @@ export async function updateTermPriority(id: number, priority: Priority): Promis
   }
   revalidatePath('/terms');
   return updated;
+}
+
+export async function fetchAllTerms(): Promise<Term[]> {
+  const supabase = await createSupabaseServerClient();
+  return getAllTerms(supabase);
 }
 
 export async function regenerateTerm(id: number, name: string, context?: string): Promise<Term> {
